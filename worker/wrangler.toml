@@ -4,13 +4,12 @@ compatibility_date = "2026-09-09"
 
 [vars]
 ALLOWED_ORIGIN = "https://daddydom8249.github.io"
+LANGUAGE_PROVIDER_MODEL = "openai/gpt-oss-120b:fastest"
+LANGUAGE_PROVIDER = "huggingface"
 
-# Hugging Face language adapter defaults to the official router when
-# LANGUAGE_PROVIDER_URL is omitted. Keep the token in Cloudflare Secrets.
-# Optional:
+# Hugging Face language adapter uses the official router by default.
+# Keep the provider token in Cloudflare Secrets.
 # LANGUAGE_PROVIDER_URL = "https://router.huggingface.co/v1/chat/completions"
-# LANGUAGE_PROVIDER_MODEL = "openai/gpt-oss-120b:fastest"
-# LANGUAGE_PROVIDER = "huggingface"
 
 # Other provider endpoints remain provider-neutral.
 # LANGUAGE_PROVIDER_URL = "https://provider.example/language"
@@ -22,7 +21,6 @@ ALLOWED_ORIGIN = "https://daddydom8249.github.io"
 # Secrets expected by the worker:
 # wrangler secret put GATEWAY_TOKEN
 # wrangler secret put LANGUAGE_PROVIDER_TOKEN
-# wrangler secret put LANGUAGE_PROVIDER_MODEL
 # wrangler secret put IMAGE_PROVIDER_TOKEN
 # wrangler secret put VIDEO_PROVIDER_TOKEN
 # wrangler secret put AUDIO_PROVIDER_TOKEN
