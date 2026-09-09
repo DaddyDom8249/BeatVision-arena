@@ -9,20 +9,13 @@
 </head>
 <body>
   <header class="hero">
-    <div>
-      <p class="eyebrow">BEATVISION / PROVIDER ARENA</p>
-      <h1>Connect technology. Create the world.</h1>
-      <p class="lede">A safe execution lab for testing real provider capabilities against the BeatVision music-video pipeline.</p>
-    </div>
+    <div><p class="eyebrow">BEATVISION / PROVIDER ARENA</p><h1>Connect technology. Create the world.</h1><p class="lede">A safe execution lab for testing real provider capabilities against the BeatVision music-video pipeline.</p></div>
     <div class="status" id="gatewayStatus">Gateway: not checked</div>
   </header>
   <main>
     <section class="panel setup">
       <div class="panel-head"><h2>Project input</h2><button id="checkGateway">Check gateway</button></div>
-      <div class="grid two">
-        <label>Song title<input id="songTitle" value="Midnight Static" autocomplete="off"></label>
-        <label>Style<input id="style" value="dark cinematic industrial rock" autocomplete="off"></label>
-      </div>
+      <div class="grid two"><label>Song title<input id="songTitle" value="Midnight Static" autocomplete="off"></label><label>Style<input id="style" value="dark cinematic industrial rock" autocomplete="off"></label></div>
       <label>Lyrics<textarea id="lyrics" rows="6">The city sleeps beneath the static
 I hear the wires breathe tonight
 Every broken signal turns cinematic
@@ -34,8 +27,13 @@ And every shadow learns to fight</textarea></label>
     </section>
     <section class="pipeline" id="pipeline" aria-label="BeatVision pipeline"></section>
     <section class="panel">
-      <div class="panel-head"><h2>Capability bench</h2><span class="muted">Test one provider capability at a time</span></div>
+      <div class="panel-head"><h2>Provider bench</h2><span class="muted">Independent capability execution and telemetry</span></div>
+      <div class="bench-summary" id="benchSummary"><span>0 executions</span><span>0 successful</span><span>0 failed</span></div>
       <div class="cap-grid" id="capabilities"></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Latest execution</h2><span class="muted" id="latestMeta">No capability run yet</span></div>
+      <div class="telemetry" id="latestExecution"><div class="empty">Run a capability to inspect request ID, provider, latency, status and output.</div></div>
     </section>
     <section class="panel">
       <div class="panel-head"><h2>Execution log</h2><button id="clearLog">Clear</button></div>
