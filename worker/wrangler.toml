@@ -2,13 +2,17 @@ name = "beatvision-provider-arena"
 main = "src/index.ts"
 compatibility_date = "2026-09-09"
 
-# Set the exact deployed frontend origin before enabling live provider access.
-# Multiple origins may be comma-separated in ALLOWED_ORIGIN.
 [vars]
 ALLOWED_ORIGIN = "https://daddydom8249.github.io"
 
-# Configure provider endpoints as environment variables/secrets in Cloudflare.
-# Do NOT commit provider URLs that contain credentials.
+# Hugging Face language adapter defaults to the official router when
+# LANGUAGE_PROVIDER_URL is omitted. Keep the token in Cloudflare Secrets.
+# Optional:
+# LANGUAGE_PROVIDER_URL = "https://router.huggingface.co/v1/chat/completions"
+# LANGUAGE_PROVIDER_MODEL = "openai/gpt-oss-120b:fastest"
+# LANGUAGE_PROVIDER = "huggingface"
+
+# Other provider endpoints remain provider-neutral.
 # LANGUAGE_PROVIDER_URL = "https://provider.example/language"
 # IMAGE_PROVIDER_URL = "https://provider.example/image"
 # VIDEO_PROVIDER_URL = "https://provider.example/video"
@@ -18,6 +22,7 @@ ALLOWED_ORIGIN = "https://daddydom8249.github.io"
 # Secrets expected by the worker:
 # wrangler secret put GATEWAY_TOKEN
 # wrangler secret put LANGUAGE_PROVIDER_TOKEN
+# wrangler secret put LANGUAGE_PROVIDER_MODEL
 # wrangler secret put IMAGE_PROVIDER_TOKEN
 # wrangler secret put VIDEO_PROVIDER_TOKEN
 # wrangler secret put AUDIO_PROVIDER_TOKEN
