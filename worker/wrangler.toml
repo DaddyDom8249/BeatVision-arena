@@ -2,12 +2,23 @@ name = "beatvision-provider-arena"
 main = "src/index.ts"
 compatibility_date = "2026-09-09"
 
+# Set the exact deployed frontend origin before enabling live provider access.
+# Multiple origins may be comma-separated in ALLOWED_ORIGIN.
 [vars]
-ALLOWED_ORIGIN = "*"
+ALLOWED_ORIGIN = "https://daddydom8249.github.io"
 
-# Configure these as Cloudflare secrets/variables in the deployment environment.
+# Configure provider endpoints as environment variables/secrets in Cloudflare.
+# Do NOT commit provider URLs that contain credentials.
 # LANGUAGE_PROVIDER_URL = "https://provider.example/language"
 # IMAGE_PROVIDER_URL = "https://provider.example/image"
 # VIDEO_PROVIDER_URL = "https://provider.example/video"
 # AUDIO_PROVIDER_URL = "https://provider.example/audio"
 # STORAGE_PROVIDER_URL = "https://provider.example/storage"
+
+# Secrets expected by the worker:
+# wrangler secret put GATEWAY_TOKEN
+# wrangler secret put LANGUAGE_PROVIDER_TOKEN
+# wrangler secret put IMAGE_PROVIDER_TOKEN
+# wrangler secret put VIDEO_PROVIDER_TOKEN
+# wrangler secret put AUDIO_PROVIDER_TOKEN
+# wrangler secret put STORAGE_PROVIDER_TOKEN
