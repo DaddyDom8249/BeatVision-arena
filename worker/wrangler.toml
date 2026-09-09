@@ -1,0 +1,13 @@
+name = "beatvision-provider-arena"
+main = "src/index.ts"
+compatibility_date = "2026-09-09"
+
+[vars]
+ALLOWED_ORIGIN = "*"
+
+# Configure these as Cloudflare secrets/variables in the deployment environment.
+# LANGUAGE_PROVIDER_URL = "https://provider.example/language"
+# IMAGE_PROVIDER_URL = "https://provider.example/image"
+# VIDEO_PROVIDER_URL = "https://provider.example/video"
+# AUDIO_PROVIDER_URL = "https://provider.example/audio"
+# STORAGE_PROVIDER_URL = "https://provider.example/storage"
