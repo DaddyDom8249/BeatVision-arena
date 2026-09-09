@@ -58,7 +58,7 @@ export default {async fetch(request: Request,env: Env): Promise<Response>{
   if(request.method==='GET'&&url.pathname==='/health')return json(request,env,{ok:true,name:'BeatVision Provider Gateway',contract_version:CONTRACT_VERSION,request_id:rid});
   if(request.method==='GET'&&url.pathname==='/v1/capabilities'){
     if(!authorized(request,env))return json(request,env,{ok:false,error:'Unauthorized.',request_id:rid},401);
-    const capabilities=Object.fromEntries((['language','image','video','audio','storage'] as Capability[]).map(c=>{const [endpoint]=providerConfig(env,c);return[c,{configured:Boolean(safeEndpoint(endpoint)),provider:c==='language'?(languageConfig(env).provider):(safeEndpoint(endpoint)?new URL(endpoint!).hostname:null)}]}));
+    const capabilities=Object.fromEntries((['language','image','video','audio','storage'] as Capability[]).map(c=>{const [endpoint,token]=providerConfig(env,c);const configured=c==='language'?Boolean(token):Boolean(safeEndpoint(endpoint));return[c,{configured,provider:c==='language'?(configured?languageConfig(env).provider:null):(safeEndpoint(endpoint)?new URL(endpoint!).hostname:null)}]}));
     return json(request,env,{ok:true,contract_version:CONTRACT_VERSION,capabilities,request_id:rid});
   }
   const capability=routes[url.pathname]; if(!capability)return json(request,env,{ok:false,error:'Route not found.',request_id:rid},404);
