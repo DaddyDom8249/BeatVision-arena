@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BeatVision Provider Arena</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="hero">
+    <div>
+      <p class="eyebrow">BEATVISION / PROVIDER ARENA</p>
+      <h1>Connect technology. Create the world.</h1>
+      <p class="lede">A safe execution lab for testing real provider capabilities against the BeatVision music-video pipeline.</p>
+    </div>
+    <div class="status" id="gatewayStatus">Gateway: not checked</div>
+  </header>
+
+  <main>
+    <section class="panel setup">
+      <div class="panel-head"><h2>Project input</h2><button id="checkGateway">Check gateway</button></div>
+      <div class="grid two">
+        <label>Song title<input id="songTitle" value="Midnight Static"></label>
+        <label>Style<input id="style" value="dark cinematic industrial rock"></label>
+      </div>
+      <label>Lyrics<textarea id="lyrics" rows="6">The city sleeps beneath the static\nI hear the wires breathe tonight\nEvery broken signal turns cinematic\nAnd every shadow learns to fight</textarea></label>
+      <label>Gateway URL<input id="gateway" placeholder="https://your-gateway.example.com"></label>
+      <p class="hint">The gateway URL is kept in this browser session only. Provider secrets never belong here. Humanity has suffered enough from API keys pasted into frontend JavaScript.</p>
+      <div class="actions"><button class="primary" id="runPipeline">Run provider pipeline</button><button id="runDemo">Run deterministic demo</button></div>
+    </section>
+
+    <section class="pipeline" id="pipeline"></section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Capability bench</h2><span class="muted">Test one provider capability at a time</span></div>
+      <div class="cap-grid" id="capabilities"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Execution log</h2><button id="clearLog">Clear</button></div>
+      <pre id="log" class="log">Ready.</pre>
+    </section>
+  </main>
+  <script src="provider-contracts.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
