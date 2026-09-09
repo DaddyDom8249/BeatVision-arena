@@ -25,6 +25,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: worker/package.json
+
+      - name: Install Worker dependencies
+        working-directory: worker
+        run: npm install
 
       - name: Install Wrangler
         run: npm install --global wrangler@latest
