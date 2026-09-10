@@ -14,8 +14,8 @@ HF_VIDEO_MODEL = "Wan-AI/Wan2.2-TI2V-5B"
 HF_VIDEO_PROVIDER = "auto"
 
 # Pollinations remains the primary provider for language, image, audio and motion.
-# video-fallback-gateway.ts adds an optional Hugging Face video fallback when
-# Pollinations rejects motion generation for insufficient balance.
+# video-fallback-gateway.ts adds optional Hugging Face motion fallback and routes
+# /v1/video/assemble to Shotstack Sandbox for real MP4 assembly.
 #
 # Secrets expected by the worker:
 # wrangler secret put GATEWAY_TOKEN
@@ -25,3 +25,6 @@ HF_VIDEO_PROVIDER = "auto"
 # wrangler secret put AUDIO_PROVIDER_TOKEN
 # wrangler secret put STORAGE_PROVIDER_TOKEN
 # wrangler secret put HF_VIDEO_TOKEN
+# wrangler secret put SHOTSTACK_API_KEY
+#
+# SHOTSTACK_API_KEY must be the Shotstack Sandbox/Stage key.
