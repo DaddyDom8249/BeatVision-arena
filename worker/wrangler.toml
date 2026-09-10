@@ -1,5 +1,5 @@
 name = "beatvision-provider-arena"
-main = "src/pollinations-gateway-v2.ts"
+main = "src/video-fallback-gateway.ts"
 compatibility_date = "2026-09-09"
 
 [vars]
@@ -9,20 +9,13 @@ LANGUAGE_PROVIDER = "pollinations"
 LANGUAGE_PROVIDER_URL = "https://gen.pollinations.ai/v1/chat/completions"
 IMAGE_PROVIDER = "pollinations"
 IMAGE_PROVIDER_MODEL = "flux"
+HF_VIDEO_MODEL = "Wan-AI/Wan2.2-TI2V-5B"
+HF_VIDEO_PROVIDER = "auto"
 
-# Pollinations language provider uses the OpenAI-compatible chat completions endpoint.
-# Keep provider tokens in Cloudflare Secrets.
-
-# Pollinations audio and motion are handled by src/pollinations-gateway-v2.ts.
-# Audio uses AUDIO_PROVIDER_TOKEN, falling back to LANGUAGE_PROVIDER_TOKEN.
-# Motion reuses IMAGE_PROVIDER_TOKEN unless VIDEO_PROVIDER_TOKEN is supplied.
-
-# Other provider endpoints remain provider-neutral.
-# IMAGE_PROVIDER_URL = "https://provider.example/image"
-# VIDEO_PROVIDER_URL = "https://provider.example/video"
-# AUDIO_PROVIDER_URL = "https://provider.example/audio"
-# STORAGE_PROVIDER_URL = "https://provider.example/storage"
-
+# Pollinations remains the primary provider for language, image, audio and motion.
+# video-fallback-gateway.ts adds an optional Hugging Face video fallback when
+# Pollinations rejects motion generation for insufficient balance.
+#
 # Secrets expected by the worker:
 # wrangler secret put GATEWAY_TOKEN
 # wrangler secret put LANGUAGE_PROVIDER_TOKEN
@@ -30,3 +23,4 @@ IMAGE_PROVIDER_MODEL = "flux"
 # wrangler secret put VIDEO_PROVIDER_TOKEN
 # wrangler secret put AUDIO_PROVIDER_TOKEN
 # wrangler secret put STORAGE_PROVIDER_TOKEN
+# wrangler secret put HF_VIDEO_TOKEN
