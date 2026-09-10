@@ -9,22 +9,25 @@ LANGUAGE_PROVIDER = "pollinations"
 LANGUAGE_PROVIDER_URL = "https://gen.pollinations.ai/v1/chat/completions"
 IMAGE_PROVIDER = "pollinations"
 IMAGE_PROVIDER_MODEL = "flux"
-VIDEO_PROVIDER = "pollinations"
+VIDEO_PROVIDER = "pixazo"
+PIXAZO_LTX_RESOLUTION = "720p"
+PIXAZO_LTX_DURATION = "5"
+PIXAZO_LTX_FPS = "25"
 HF_VIDEO_MODEL = "Wan-AI/Wan2.2-TI2V-5B"
 HF_VIDEO_PROVIDER = "auto"
 
-# Pollinations remains the primary provider for language, image, audio and motion.
-# video-fallback-gateway.ts adds optional Hugging Face motion fallback and routes
-# /v1/video/assemble to Shotstack Sandbox for real MP4 assembly.
+# Pollinations remains the language, image and audio provider.
+# Free Pixazo LTX is the primary motion provider.
+# Shotstack Sandbox is the real MP4 assembly layer.
+# Hugging Face remains an optional secondary motion fallback.
 #
 # Secrets expected by the worker:
 # wrangler secret put GATEWAY_TOKEN
 # wrangler secret put LANGUAGE_PROVIDER_TOKEN
 # wrangler secret put IMAGE_PROVIDER_TOKEN
-# wrangler secret put VIDEO_PROVIDER_TOKEN
 # wrangler secret put AUDIO_PROVIDER_TOKEN
-# wrangler secret put STORAGE_PROVIDER_TOKEN
-# wrangler secret put HF_VIDEO_TOKEN
+# wrangler secret put PIXAZO_API_KEY
 # wrangler secret put SHOTSTACK_API_KEY
+# wrangler secret put HF_VIDEO_TOKEN
 #
 # SHOTSTACK_API_KEY must be the Shotstack Sandbox/Stage key.
