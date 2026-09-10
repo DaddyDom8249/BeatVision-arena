@@ -1,6 +1,7 @@
 import original from './index';
 
 const VIDEO_BASE='https://gen.pollinations.ai';
+const MEDIA_BASE='https://media.pollinations.ai';
 const VIDEO_MODEL='seedance-2.0-fast';
 const VIDEO_TIMEOUT_MS=120_000;
 
@@ -39,7 +40,7 @@ function dataUrlBlob(v:any){
 async function uploadMedia(blob:Blob,token:string,filename:string,signal:AbortSignal){
   const form=new FormData();
   form.append('file',blob,filename);
-  const res=await fetch(`${VIDEO_BASE}/upload`,{method:'POST',headers:{Authorization:`Bearer ${token}`},body:form,signal});
+  const res=await fetch(`${MEDIA_BASE}/upload`,{method:'POST',headers:{Authorization:`Bearer ${token}`},body:form,signal});
   const text=await res.text();
   if(!res.ok)throw new Error(`Pollinations media upload returned ${res.status}: ${text.slice(0,800)}`);
   const data=JSON.parse(text);
@@ -72,7 +73,7 @@ export default {
       const p=body.payload||{};
       const scene=p.storyboard?.scenes?.[0]||{};
       const prompt=`Animate this BeatVision scene with restrained cinematic camera motion, natural subject movement, atmospheric lighting and continuity. Style: ${String(p.style||'').slice(0,1000)}. World: ${String(p.world?.logline||'').slice(0,1500)}. Storyboard direction: ${String(scene.visual_direction||scene.description||'').slice(0,2000)}`;
-      const target=`${VIDEO_BASE}/video/${encodeURIComponent(prompt)}?model=${encodeURIComponent(VIDEO_MODEL)}&duration=4&aspectRatio=16:9&image=${encodeURIComponent(imageMediaUrl)}`;
+      const target=`${VIDEO_BASE}/video/${encodeURIComponent(prompt)}?model=${encodeURIComponent(VIDEO_MODEL)}&duration=4&aspectRatio=16:9&image[0]=${encodeURIComponent(imageMediaUrl)}`;
       const videoRes=await fetch(target,{method:'GET',headers:{Authorization:`Bearer ${token}`,'X-BeatVision-Request':id},signal:ctl.signal});
       if(!videoRes.ok){const text=await videoRes.text();throw new Error(`Pollinations video provider returned ${videoRes.status}: ${text.slice(0,1200)}`)}
       const videoBlob=await videoRes.blob();
