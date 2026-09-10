@@ -1,4 +1,5 @@
 import primary from './pollinations-gateway-v2';
+import shotstack from './shotstack-gateway';
 import { InferenceClient } from '@huggingface/inference';
 
 const HF_MODEL = 'Wan-AI/Wan2.1-I2V-14B-720P';
@@ -160,7 +161,10 @@ async function hfFallback(r: Request, e: any, body: any, id: string) {
 export default {
   async fetch(r: Request, e: any) {
     if (r.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(r, e) });
-    if (new URL(r.url).pathname !== '/v1/video/animate') return primary.fetch(r, e);
+
+    const path = new URL(r.url).pathname;
+    if (path === '/v1/video/assemble') return shotstack.fetch(r, e);
+    if (path !== '/v1/video/animate') return primary.fetch(r, e);
 
     const id = r.headers.get('X-BeatVision-Request') || crypto.randomUUID();
     if (!auth(r, e)) return json(r, e, { ok: false, error: 'Unauthorized', request_id: id }, 401);
