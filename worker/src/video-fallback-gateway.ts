@@ -1,8 +1,7 @@
 import primary from './pollinations-gateway-v2';
 import { InferenceClient } from '@huggingface/inference';
 
-const HF_MODEL = 'Wan-AI/Wan2.2-TI2V-5B';
-const MEDIA_BASE = 'https://media.pollinations.ai';
+const HF_MODEL = 'Wan-AI/Wan2.1-I2V-14B-720P';
 
 function cors(r: Request, e: any) {
   const o = r.headers.get('Origin') || '';
@@ -31,30 +30,37 @@ function clip(v: unknown, n: number) {
   return String(v || '').slice(0, n);
 }
 
-async function uploadVideo(video: Blob, token: string, id: string, signal: AbortSignal) {
-  const form = new FormData();
-  form.append('file', video, 'beatvision-hf-fallback.mp4');
-  const res = await fetch(`${MEDIA_BASE}/upload`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'X-BeatVision-Request': id },
-    body: form,
-    signal
-  });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`Media upload returned ${res.status}: ${text.slice(0, 800)}`);
-  const data: any = JSON.parse(text);
-  if (!data?.url) throw new Error('Media upload returned no URL');
-  return data.url as string;
+function firstImageDataUrl(payload: any) {
+  const imgs = payload?.images?.images || payload?.images || [];
+  const item = Array.isArray(imgs) ? imgs[0] : imgs;
+  const value = item?.image_url || item?.url || item?.data_url || null;
+  return typeof value === 'string' && value.startsWith('data:') ? value : null;
+}
+
+function dataUrlToBase64(value: string) {
+  const comma = value.indexOf(',');
+  if (comma < 0) throw new Error('Invalid scene image data URL');
+  return value.slice(comma + 1);
+}
+
+async function blobToDataUrl(blob: Blob) {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + chunk, bytes.length)));
+  }
+  return `data:${blob.type || 'video/mp4'};base64,${btoa(binary)}`;
 }
 
 function fallbackPrompt(payload: any) {
   const scene = payload?.storyboard?.scenes?.[0] || {};
   return [
-    'Create a cinematic music-video shot matching this BeatVision scene.',
+    'Animate the supplied BeatVision scene image into a cinematic music-video shot.',
     `Style: ${clip(payload?.style, 1000)}`,
     `World: ${clip(payload?.world?.logline, 1200)}`,
     `Scene: ${clip(scene.visual_direction || scene.description, 1800)}`,
-    'Use restrained cinematic camera movement, natural subject motion, atmospheric lighting, continuity, and a 16:9 composition.'
+    'Preserve the supplied image composition, character identity, environment, and visual continuity. Use restrained cinematic camera movement, natural subject motion, atmospheric lighting, and a 16:9 composition.'
   ].join('\n');
 }
 
@@ -74,31 +80,38 @@ async function hfFallback(r: Request, e: any, body: any, id: string) {
     }, 503);
   }
 
+  const image = firstImageDataUrl(body.payload || {});
+  if (!image) {
+    return json(r, e, {
+      ok: false,
+      contract_version: '1.1',
+      capability: 'video',
+      provider: 'huggingface',
+      model: e.HF_VIDEO_MODEL || HF_MODEL,
+      status: 'invalid_input',
+      request_id: id,
+      error: 'HF image-to-video fallback requires the approved scene image as a data URL.'
+    }, 400);
+  }
+
   const start = Date.now();
   const ctl = new AbortController();
   const tm = setTimeout(() => ctl.abort(), 180_000);
   try {
     const client = new InferenceClient(token, { timeout: 170_000 });
-    const video = await client.textToVideo({
+    const video = await client.imageToVideo({
       model: e.HF_VIDEO_MODEL || HF_MODEL,
-      inputs: fallbackPrompt(body.payload || {}),
-      provider: e.HF_VIDEO_PROVIDER || 'auto'
+      provider: e.HF_VIDEO_PROVIDER || 'auto',
+      inputs: dataUrlToBase64(image),
+      parameters: {
+        prompt: fallbackPrompt(body.payload || {}),
+        num_frames: Number(e.HF_VIDEO_FRAMES || 49),
+        num_inference_steps: Number(e.HF_VIDEO_STEPS || 20)
+      }
     });
     const blob = video instanceof Blob ? video : new Blob([video as any], { type: 'video/mp4' });
-    const mediaToken = e.VIDEO_PROVIDER_TOKEN || e.IMAGE_PROVIDER_TOKEN;
-    if (!mediaToken) {
-      return json(r, e, {
-        ok: false,
-        contract_version: '1.1',
-        capability: 'video',
-        provider: 'huggingface',
-        model: e.HF_VIDEO_MODEL || HF_MODEL,
-        status: 'provider_unavailable',
-        request_id: id,
-        error: 'HF video generation succeeded, but no media upload token is configured for returning the MP4 to BeatVision.'
-      }, 503);
-    }
-    const url = await uploadVideo(blob, mediaToken, id, ctl.signal);
+    const videoUrl = await blobToDataUrl(blob);
+
     return json(r, e, {
       ok: true,
       contract_version: '1.1',
@@ -106,13 +119,16 @@ async function hfFallback(r: Request, e: any, body: any, id: string) {
       provider: 'huggingface',
       model: e.HF_VIDEO_MODEL || HF_MODEL,
       fallback_from: 'pollinations',
+      delivery: 'inline_data_url',
+      persistent_storage: false,
       latency_ms: Date.now() - start,
       request_id: id,
       result: {
         status: 'animated',
-        video_url: url,
+        video_url: videoUrl,
         mime_type: blob.type || 'video/mp4',
-        source: 'HF text-to-video fallback'
+        source_image_url: image,
+        source: 'HF image-to-video fallback'
       }
     });
   } catch (err) {
@@ -126,7 +142,7 @@ async function hfFallback(r: Request, e: any, body: any, id: string) {
       model: e.HF_VIDEO_MODEL || HF_MODEL,
       status: 'provider_unavailable',
       request_id: id,
-      error: timed ? 'HF video fallback timed out after 180 seconds' : `HF video fallback failed: ${msg.slice(0, 1800)}`,
+      error: timed ? 'HF image-to-video fallback timed out after 180 seconds' : `HF image-to-video fallback failed: ${msg.slice(0, 1800)}`,
       primary_provider: 'pollinations',
       primary_failure: 'insufficient_balance'
     }, timed ? 504 : 503);
@@ -143,6 +159,8 @@ export default {
     const id = r.headers.get('X-BeatVision-Request') || crypto.randomUUID();
     if (!auth(r, e)) return json(r, e, { ok: false, error: 'Unauthorized', request_id: id }, 401);
 
+    // Clone before delegating because the primary gateway consumes the request body.
+    const fallbackRequest = r.clone();
     const response = await primary.fetch(r, e);
     if (response.status !== 502) return response;
 
@@ -152,7 +170,7 @@ export default {
     if (!/returned 402|INSUFFICIENT_BALANCE|insufficient balance/i.test(primaryError)) return response;
 
     let body: any;
-    try { body = await r.clone().json(); } catch { return response; }
+    try { body = await fallbackRequest.json(); } catch { return response; }
     return hfFallback(r, e, body, id);
   }
 };
