@@ -37,10 +37,16 @@ function firstImageDataUrl(payload: any) {
   return typeof value === 'string' && value.startsWith('data:') ? value : null;
 }
 
-function dataUrlToBase64(value: string) {
+function dataUrlToBlob(value: string) {
   const comma = value.indexOf(',');
-  if (comma < 0) throw new Error('Invalid scene image data URL');
-  return value.slice(comma + 1);
+  if (comma < 0 || !value.startsWith('data:')) throw new Error('Invalid scene image data URL');
+  const header = value.slice(5, comma);
+  const mime = header.split(';')[0] || 'image/jpeg';
+  const base64 = value.slice(comma + 1).replace(/\s/g, '');
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
 }
 
 async function blobToDataUrl(blob: Blob) {
@@ -102,7 +108,7 @@ async function hfFallback(r: Request, e: any, body: any, id: string) {
     const video = await client.imageToVideo({
       model: e.HF_VIDEO_MODEL || HF_MODEL,
       provider: e.HF_VIDEO_PROVIDER || 'auto',
-      inputs: dataUrlToBase64(image),
+      inputs: dataUrlToBlob(image),
       parameters: {
         prompt: fallbackPrompt(body.payload || {}),
         num_frames: Number(e.HF_VIDEO_FRAMES || 49),
