@@ -16,9 +16,37 @@ async function hfFallback(r: Request, e: any, body: any, id: string) { const tok
 export default { async fetch(r: Request, e: any) {
   if (r.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(r, e) });
   const path = new URL(r.url).pathname;
+  const id = r.headers.get('X-BeatVision-Request') || crypto.randomUUID();
+
+  if (path === '/' || path === '/health') {
+    return json(r, e, {
+      ok: true,
+      status: 'online',
+      name: 'BeatVision Provider Gateway',
+      contract_version: '1.1',
+      primary_motion_provider: 'pixazo',
+      assembly_provider: 'shotstack-sandbox',
+      fallback_provider: e.HF_VIDEO_TOKEN ? 'huggingface' : 'none',
+      request_id: id
+    });
+  }
+
+  if (path === '/v1/capabilities') {
+    if (!auth(r, e)) return json(r, e, { ok: false, error: 'Unauthorized', request_id: id }, 401);
+    return json(r, e, {
+      ok: true,
+      contract_version: '1.1',
+      capabilities: {
+        video: { configured: !!e.PIXAZO_API_KEY, provider: 'pixazo', model: 'ltx' },
+        assembly: { configured: !!e.SHOTSTACK_API_KEY, provider: 'shotstack-sandbox' },
+        fallback: { configured: !!e.HF_VIDEO_TOKEN, provider: e.HF_VIDEO_TOKEN ? 'huggingface' : 'none' }
+      },
+      request_id: id
+    });
+  }
+
   if (path === '/v1/video/assemble') return shotstack.fetch(r, e);
   if (path !== '/v1/video/animate') return pixazo.fetch(r, e);
-  const id = r.headers.get('X-BeatVision-Request') || crypto.randomUUID();
   if (!auth(r, e)) return json(r, e, { ok: false, error: 'Unauthorized', request_id: id }, 401);
   const pixazoResponse = await pixazo.fetch(r.clone(), e);
   if (pixazoResponse.status < 500) return pixazoResponse;
