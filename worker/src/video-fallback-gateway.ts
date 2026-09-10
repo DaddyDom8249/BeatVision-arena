@@ -1,5 +1,6 @@
 import pixazo from './pixazo-ltx-gateway';
 import shotstack from './shotstack-gateway';
+import pollinations from './pollinations-gateway-v2';
 import { InferenceClient } from '@huggingface/inference';
 
 const HF_MODEL = 'Wan-AI/Wan2.1-I2V-14B-720P';
@@ -24,31 +25,44 @@ export default { async fetch(r: Request, e: any) {
 
   if (path === '/v1/capabilities') {
     if (!auth(r, e)) return json(r, e, { ok: false, error: 'Unauthorized', request_id: id }, 401);
-    return json(r, e, { ok: true, contract_version: '1.1', capabilities: { video: { configured: !!e.PIXAZO_API_KEY, provider: 'pixazo', model: 'ltx' }, assembly: { configured: !!e.SHOTSTACK_API_KEY, provider: 'shotstack-sandbox' }, fallback: { configured: !!e.HF_VIDEO_TOKEN, provider: e.HF_VIDEO_TOKEN ? 'huggingface' : 'none' } }, request_id: id });
+    return json(r, e, {
+      ok: true,
+      contract_version: '1.1',
+      capabilities: {
+        language: { configured: !!e.LANGUAGE_PROVIDER_TOKEN, provider: e.LANGUAGE_PROVIDER || 'pollinations', model: e.LANGUAGE_PROVIDER_MODEL || 'openai' },
+        image: { configured: !!e.IMAGE_PROVIDER_TOKEN, provider: e.IMAGE_PROVIDER || 'pollinations', model: e.IMAGE_PROVIDER_MODEL || 'flux' },
+        audio: { configured: !!(e.AUDIO_PROVIDER_TOKEN || e.LANGUAGE_PROVIDER_TOKEN), provider: 'pollinations', model: 'whisper-large-v3' },
+        video: { configured: !!e.PIXAZO_API_KEY, provider: 'pixazo', model: 'ltx' },
+        assembly: { configured: !!e.SHOTSTACK_API_KEY, provider: 'shotstack-sandbox' },
+        fallback: { configured: !!e.HF_VIDEO_TOKEN, provider: e.HF_VIDEO_TOKEN ? 'huggingface' : 'none' },
+        storage: { configured: !!e.STORAGE_PROVIDER_URL, provider: e.STORAGE_PROVIDER_URL || null, optional: true }
+      },
+      request_id: id
+    });
   }
 
   if (path === '/v1/video/assemble') return shotstack.fetch(r, e);
-  if (path !== '/v1/video/animate') return pixazo.fetch(r, e);
-  if (!auth(r, e)) return json(r, e, { ok: false, error: 'Unauthorized', request_id: id }, 401);
-
-  // Read and validate the BeatVision envelope once, then reconstruct the Request
-  // before handing it to the Pixazo adapter. This removes any ambiguity caused by
-  // cloned/consumed request bodies and gives the client a diagnostic if a stale UI
-  // ever sends an older contract.
-  let rawBody = '';
-  let body: any;
-  try {
-    rawBody = await r.clone().text();
-    body = JSON.parse(rawBody);
-  } catch {
-    return json(r, e, { ok: false, contract_version: '1.1', capability: 'video', provider: 'gateway', status: 'invalid_input', request_id: id, error: 'Invalid JSON body sent to /v1/video/animate.' }, 400);
+  if (path === '/v1/video/animate') {
+    if (!auth(r, e)) return json(r, e, { ok: false, error: 'Unauthorized', request_id: id }, 401);
+    let rawBody = '';
+    let body: any;
+    try {
+      rawBody = await r.clone().text();
+      body = JSON.parse(rawBody);
+    } catch {
+      return json(r, e, { ok: false, contract_version: '1.1', capability: 'video', provider: 'gateway', status: 'invalid_input', request_id: id, error: 'Invalid JSON body sent to /v1/video/animate.' }, 400);
+    }
+    if (body?.contract_version !== '1.1' || body?.operation !== 'animate') {
+      return json(r, e, { ok: false, contract_version: '1.1', capability: 'video', provider: 'gateway', status: 'contract_mismatch', request_id: id, expected: { contract_version: '1.1', operation: 'animate' }, received: { contract_version: body?.contract_version ?? null, operation: body?.operation ?? null }, error: 'BeatVision animation request did not use contract 1.1 animate.' }, 400);
+    }
+    const forwarded = new Request(r.url, { method: 'POST', headers: new Headers(r.headers), body: rawBody });
+    const pixazoResponse = await pixazo.fetch(forwarded, e);
+    if (pixazoResponse.status < 500) return pixazoResponse;
+    return hfFallback(r, e, body, id);
   }
-  if (body?.contract_version !== '1.1' || body?.operation !== 'animate') {
-    return json(r, e, { ok: false, contract_version: '1.1', capability: 'video', provider: 'gateway', status: 'contract_mismatch', request_id: id, expected: { contract_version: '1.1', operation: 'animate' }, received: { contract_version: body?.contract_version ?? null, operation: body?.operation ?? null }, error: 'BeatVision animation request did not use contract 1.1 animate.' }, 400);
-  }
 
-  const forwarded = new Request(r.url, { method: 'POST', headers: new Headers(r.headers), body: rawBody });
-  const pixazoResponse = await pixazo.fetch(forwarded, e);
-  if (pixazoResponse.status < 500) return pixazoResponse;
-  return hfFallback(r, e, body, id);
+  // Language, image, audio, and storage remain on the general provider gateway.
+  // The old router sent every non-video path to Pixazo, which caused the exact
+  // 400 "Expected BeatVision contract 1.1 animate operation" failure on audio.
+  return pollinations.fetch(r, e);
 } };
