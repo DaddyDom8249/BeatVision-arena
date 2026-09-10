@@ -19,37 +19,36 @@ export default { async fetch(r: Request, e: any) {
   const id = r.headers.get('X-BeatVision-Request') || crypto.randomUUID();
 
   if (path === '/' || path === '/health') {
-    return json(r, e, {
-      ok: true,
-      status: 'online',
-      name: 'BeatVision Provider Gateway',
-      contract_version: '1.1',
-      primary_motion_provider: 'pixazo',
-      assembly_provider: 'shotstack-sandbox',
-      fallback_provider: e.HF_VIDEO_TOKEN ? 'huggingface' : 'none',
-      request_id: id
-    });
+    return json(r, e, { ok: true, status: 'online', name: 'BeatVision Provider Gateway', contract_version: '1.1', primary_motion_provider: 'pixazo', assembly_provider: 'shotstack-sandbox', fallback_provider: e.HF_VIDEO_TOKEN ? 'huggingface' : 'none', request_id: id });
   }
 
   if (path === '/v1/capabilities') {
     if (!auth(r, e)) return json(r, e, { ok: false, error: 'Unauthorized', request_id: id }, 401);
-    return json(r, e, {
-      ok: true,
-      contract_version: '1.1',
-      capabilities: {
-        video: { configured: !!e.PIXAZO_API_KEY, provider: 'pixazo', model: 'ltx' },
-        assembly: { configured: !!e.SHOTSTACK_API_KEY, provider: 'shotstack-sandbox' },
-        fallback: { configured: !!e.HF_VIDEO_TOKEN, provider: e.HF_VIDEO_TOKEN ? 'huggingface' : 'none' }
-      },
-      request_id: id
-    });
+    return json(r, e, { ok: true, contract_version: '1.1', capabilities: { video: { configured: !!e.PIXAZO_API_KEY, provider: 'pixazo', model: 'ltx' }, assembly: { configured: !!e.SHOTSTACK_API_KEY, provider: 'shotstack-sandbox' }, fallback: { configured: !!e.HF_VIDEO_TOKEN, provider: e.HF_VIDEO_TOKEN ? 'huggingface' : 'none' } }, request_id: id });
   }
 
   if (path === '/v1/video/assemble') return shotstack.fetch(r, e);
   if (path !== '/v1/video/animate') return pixazo.fetch(r, e);
   if (!auth(r, e)) return json(r, e, { ok: false, error: 'Unauthorized', request_id: id }, 401);
-  const pixazoResponse = await pixazo.fetch(r.clone(), e);
+
+  // Read and validate the BeatVision envelope once, then reconstruct the Request
+  // before handing it to the Pixazo adapter. This removes any ambiguity caused by
+  // cloned/consumed request bodies and gives the client a diagnostic if a stale UI
+  // ever sends an older contract.
+  let rawBody = '';
+  let body: any;
+  try {
+    rawBody = await r.clone().text();
+    body = JSON.parse(rawBody);
+  } catch {
+    return json(r, e, { ok: false, contract_version: '1.1', capability: 'video', provider: 'gateway', status: 'invalid_input', request_id: id, error: 'Invalid JSON body sent to /v1/video/animate.' }, 400);
+  }
+  if (body?.contract_version !== '1.1' || body?.operation !== 'animate') {
+    return json(r, e, { ok: false, contract_version: '1.1', capability: 'video', provider: 'gateway', status: 'contract_mismatch', request_id: id, expected: { contract_version: '1.1', operation: 'animate' }, received: { contract_version: body?.contract_version ?? null, operation: body?.operation ?? null }, error: 'BeatVision animation request did not use contract 1.1 animate.' }, 400);
+  }
+
+  const forwarded = new Request(r.url, { method: 'POST', headers: new Headers(r.headers), body: rawBody });
+  const pixazoResponse = await pixazo.fetch(forwarded, e);
   if (pixazoResponse.status < 500) return pixazoResponse;
-  let body: any; try { body = await r.clone().json(); } catch { return pixazoResponse; }
   return hfFallback(r, e, body, id);
 } };
