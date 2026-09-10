@@ -4,20 +4,19 @@ compatibility_date = "2026-09-09"
 
 [vars]
 ALLOWED_ORIGIN = "https://daddydom8249.github.io"
-LANGUAGE_PROVIDER_MODEL = "openai/gpt-oss-120b:fastest"
-LANGUAGE_PROVIDER = "huggingface"
+LANGUAGE_PROVIDER_MODEL = "openai"
+LANGUAGE_PROVIDER = "pollinations"
+LANGUAGE_PROVIDER_URL = "https://gen.pollinations.ai/v1/chat/completions"
 IMAGE_PROVIDER = "pollinations"
 IMAGE_PROVIDER_MODEL = "flux"
 
-# Hugging Face language adapter uses the official router by default.
+# Pollinations language provider uses the OpenAI-compatible chat completions endpoint.
 # Keep provider tokens in Cloudflare Secrets.
-# LANGUAGE_PROVIDER_URL = "https://router.huggingface.co/v1/chat/completions"
 
 # Pollinations motion is handled by src/pollinations-video-gateway.ts.
 # It reuses IMAGE_PROVIDER_TOKEN unless VIDEO_PROVIDER_TOKEN is supplied.
 
 # Other provider endpoints remain provider-neutral.
-# LANGUAGE_PROVIDER_URL = "https://provider.example/language"
 # IMAGE_PROVIDER_URL = "https://provider.example/image"
 # VIDEO_PROVIDER_URL = "https://provider.example/video"
 # AUDIO_PROVIDER_URL = "https://provider.example/audio"
