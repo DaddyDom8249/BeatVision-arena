@@ -13,8 +13,11 @@ VIDEO_PROVIDER = "pixazo"
 PIXAZO_LTX_RESOLUTION = "720p"
 PIXAZO_LTX_DURATION = "5"
 PIXAZO_LTX_FPS = "25"
-HF_VIDEO_MODEL = "Wan-AI/Wan2.2-TI2V-5B"
-HF_VIDEO_PROVIDER = "auto"
+# HF fallback must use an actual image-to-video provider/model pair.
+# Wan2.2-TI2V-5B was exposed by the selected HF route as text-to-video,
+# which caused the observed fallback 503. Use the dedicated Wan2.1 I2V model.
+HF_VIDEO_MODEL = "Wan-AI/Wan2.1-I2V-14B-720P"
+HF_VIDEO_PROVIDER = "fal-ai"
 
 # Pollinations remains the language, image and audio provider.
 # Free Pixazo LTX is the primary motion provider.
