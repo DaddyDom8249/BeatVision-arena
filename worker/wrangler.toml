@@ -6,9 +6,11 @@ compatibility_date = "2026-09-09"
 ALLOWED_ORIGIN = "https://daddydom8249.github.io"
 LANGUAGE_PROVIDER_MODEL = "openai/gpt-oss-120b:fastest"
 LANGUAGE_PROVIDER = "huggingface"
+IMAGE_PROVIDER = "pollinations"
+IMAGE_PROVIDER_MODEL = "flux"
 
 # Hugging Face language adapter uses the official router by default.
-# Keep the provider token in Cloudflare Secrets.
+# Keep provider tokens in Cloudflare Secrets.
 # LANGUAGE_PROVIDER_URL = "https://router.huggingface.co/v1/chat/completions"
 
 # Other provider endpoints remain provider-neutral.
