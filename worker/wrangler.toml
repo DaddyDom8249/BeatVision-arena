@@ -1,5 +1,5 @@
 name = "beatvision-provider-arena"
-main = "src/pollinations-video-gateway.ts"
+main = "src/pollinations-gateway-v2.ts"
 compatibility_date = "2026-09-09"
 
 [vars]
@@ -13,8 +13,9 @@ IMAGE_PROVIDER_MODEL = "flux"
 # Pollinations language provider uses the OpenAI-compatible chat completions endpoint.
 # Keep provider tokens in Cloudflare Secrets.
 
-# Pollinations motion is handled by src/pollinations-video-gateway.ts.
-# It reuses IMAGE_PROVIDER_TOKEN unless VIDEO_PROVIDER_TOKEN is supplied.
+# Pollinations audio and motion are handled by src/pollinations-gateway-v2.ts.
+# Audio uses AUDIO_PROVIDER_TOKEN, falling back to LANGUAGE_PROVIDER_TOKEN.
+# Motion reuses IMAGE_PROVIDER_TOKEN unless VIDEO_PROVIDER_TOKEN is supplied.
 
 # Other provider endpoints remain provider-neutral.
 # IMAGE_PROVIDER_URL = "https://provider.example/image"
