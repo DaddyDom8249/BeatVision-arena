@@ -9,6 +9,7 @@ LANGUAGE_PROVIDER = "pollinations"
 LANGUAGE_PROVIDER_URL = "https://gen.pollinations.ai/v1/chat/completions"
 IMAGE_PROVIDER = "pollinations"
 IMAGE_PROVIDER_MODEL = "flux"
+VIDEO_PROVIDER = "pollinations"
 HF_VIDEO_MODEL = "Wan-AI/Wan2.2-TI2V-5B"
 HF_VIDEO_PROVIDER = "auto"
 
