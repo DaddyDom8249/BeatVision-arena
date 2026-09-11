@@ -3,14 +3,324 @@ import { resolveShotstackSource } from './shotstack-gateway';
 const BASE = 'https://gateway.pixazo.ai';
 const STATUS = `${BASE}/v2/requests/status/`;
 const CONTRACT = '1.1';
-const cors = (r: Request, e: any) => { const o = r.headers.get('Origin') || ''; const a = String(e.ALLOWED_ORIGIN || '').split(',').map((x: string) => x.trim()).filter(Boolean); return { 'Access-Control-Allow-Origin': o && (!a.length || a.includes(o)) ? o : (a[0] || '*'), 'Vary': 'Origin', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,X-BeatVision-Contract,Authorization,X-BeatVision-Request' }; };
-const json = (r: Request, e: any, d: unknown, status = 200) => new Response(JSON.stringify(d, null, 2), { status, headers: { 'Content-Type': 'application/json', ...cors(r, e) } });
-const auth = (r: Request, e: any) => !e.GATEWAY_TOKEN || r.headers.get('Authorization') === `Bearer ${e.GATEWAY_TOKEN}`;
-const media = (d: any) => d?.output?.media_url?.[0] || d?.output?.media_url || d?.output || d?.imageUrl || d?.image_url || d?.url || null;
-const image = (p: any) => { const a = p?.images?.images || p?.images || []; const x = Array.isArray(a) ? a[0] : a; return x?.image_url || x?.url || x?.data_url || null; };
-const prompt = (p: any, s?: any) => ['BeatVision cinematic music-video artwork.', 'Preserve established world, characters, environments and continuity.', 'No text, logos or watermarks.', `Style: ${String(p?.style || '').slice(0, 1400)}`, `World: ${JSON.stringify(p?.world || {}).slice(0, 7000)}`, s ? `Scene: ${JSON.stringify(s).slice(0, 5000)}` : 'Create a strong world establishing image.'].join('\n');
-async function call(path: string, key: string, body: any) { const r = await fetch(`${BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Ocp-Apim-Subscription-Key': key }, body: JSON.stringify(body) }); const t = await r.text(); let d: any; try { d = JSON.parse(t); } catch { d = { raw: t }; } if (!r.ok) throw new Error(`Pixazo ${r.status}: ${String(d?.message || d?.error || t).slice(0, 1800)}`); return d; }
-async function wait(key: string, id: string, model: string) { const end = Date.now() + 90000; while (Date.now() < end) { const r = await fetch(`${STATUS}${encodeURIComponent(id)}`, { headers: { 'Ocp-Apim-Subscription-Key': key } }); const t = await r.text(); let d: any; try { d = JSON.parse(t); } catch { d = {}; } if (!r.ok) throw new Error(`Pixazo status ${r.status}: ${t.slice(0, 1200)}`); const s = String(d?.status || '').toUpperCase(); if (s === 'COMPLETED') { const u = media(d); if (!u) throw new Error(`Pixazo ${model} completed without media.`); return u; } if (['ERROR', 'FAILED', 'CANCELLED'].includes(s)) throw new Error(`Pixazo ${model} job ${s}: ${String(d?.error || 'unknown error').slice(0, 1600)}`); await new Promise(x => setTimeout(x, 3000)); } throw new Error(`Pixazo ${model} job timed out.`); }
-async function img(key: string, model: 'flux' | 'sd3-5' | 'sdxl', p: string) { const d = model === 'flux' ? await call('/flux/text-to-image', key, { prompt: p }) : model === 'sd3-5' ? await call('/sd3-5/v1/r-sd-3-5-large', key, { prompt: p, aspect_ratio: '16:9', cfg: 5, steps: 35, output_format: 'webp', output_quality: 90 }) : await call('/getImage/v1/getSDXLImage', key, { prompt: p, height: 1024, width: 1024, num_steps: 20, guidance_scale: 5 }); return d?.request_id ? wait(key, d.request_id, model) : media(d); }
-async function animate(r: Request, e: any, key: string, p: any, id: string) { const raw = image(p); if (!raw) return json(r, e, { ok: false, contract_version: CONTRACT, capability: 'video', provider: 'pixazo', status: 'invalid_input', request_id: id, error: 'No approved scene image was supplied.' }, 400); const started = Date.now(); try { const src = raw.startsWith('data:') ? await resolveShotstackSource(raw, e.SHOTSTACK_API_KEY || '', 'beatvision-scene.jpg') : raw; const d = await call('/ltx/image-to-video', key, { prompt: prompt(p, p?.storyboard?.scenes?.[0]), image_url: src, resolution: e.PIXAZO_LTX_RESOLUTION || '720p', duration: Number(e.PIXAZO_LTX_DURATION || 5), fps: Number(e.PIXAZO_LTX_FPS || 25), aspect_ratio: '16:9' }); if (!d?.request_id) throw new Error('Pixazo LTX did not return a request_id.'); const u = await wait(key, d.request_id, 'ltx'); return json(r, e, { ok: true, contract_version: CONTRACT, capability: 'video', provider: 'pixazo', model: 'ltx', status: 'animated', latency_ms: Date.now() - started, request_id: id, result: { status: 'animated', video_url: u, source: 'Pixazo free LTX image-to-video', pixazo_request_id: d.request_id } }); } catch (err) { return json(r, e, { ok: false, contract_version: CONTRACT, capability: 'video', provider: 'pixazo', model: 'ltx', status: 'provider_error', request_id: id, latency_ms: Date.now() - started, error: String(err instanceof Error ? err.message : err).slice(0, 2000) }, 502); } }
-export default { async fetch(r: Request, e: any) { if (r.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(r, e) }); const id = r.headers.get('X-BeatVision-Request') || crypto.randomUUID(); if (!auth(r, e)) return json(r, e, { ok: false, error: 'Unauthorized', request_id: id }, 401); if (r.method !== 'POST') return json(r, e, { ok: false, error: 'POST required', request_id: id }, 405); const key = e.PIXAZO_API_KEY; if (!key) return json(r, e, { ok: false, contract_version: CONTRACT, status: 'provider_unavailable', provider: 'pixazo', request_id: id, error: 'PIXAZO_API_KEY is not configured.' }, 503); let b: any; try { b = await r.json(); } catch { return json(r, e, { ok: false, error: 'Invalid JSON body', request_id: id }, 400); } if (b?.contract_version !== CONTRACT) return json(r, e, { ok: false, error: 'Expected BeatVision contract 1.1.', request_id: id }, 400); const p = b.payload || {}; const op = b.operation; try { if (op === 'animate') return animate(r, e, key, p, id); if (op === 'worldAssets') { const [character, environment, hero] = await Promise.all([img(key, 'flux', prompt(p) + ' Focus on the primary recurring character.'), img(key, 'flux', prompt(p) + ' Focus on the defining environment.'), img(key, 'sdxl', prompt(p) + ' Create a polished establishing keyframe.')]); return json(r, e, { ok: true, contract_version: CONTRACT, capability: 'image', provider: 'pixazo', model: 'flux+sdxl', request_id: id, result: { characters: [{ name: 'Primary BeatVision character', image_url: character }], environments: [{ name: 'Primary BeatVision environment', image_url: environment }], hero_image_url: hero, models_used: ['flux-schnell', 'sdxl'] } }); } if (op === 'sceneImages') { const scenes = Array.isArray(p?.storyboard?.scenes) ? p.storyboard.scenes.slice(0, 8) : []; if (!scenes.length) return json(r, e, { ok: false, status: 'invalid_input', request_id: id, error: 'Storyboard contains no scenes.' }, 400); const images = await Promise.all(scenes.map(async (s: any, i: number) => ({ scene: Number(s.scene || i + 1), status: 'generated', image_url: await img(key, 'sd3-5', prompt(p, s)) }))); return json(r, e, { ok: true, contract_version: CONTRACT, capability: 'image', provider: 'pixazo', model: 'sd3.5', request_id: id, result: { images, models_used: ['sd3.5'] } }); } if (op === 'generateMusic') { const d = await call('/tracks/v1/generate', key, { prompt: String(p?.music_prompt || p?.style || 'cinematic instrumental music').slice(0, 5000), lyrics: String(p?.lyrics || '').slice(0, 12000), instrumental: !p?.lyrics, duration: Math.max(10, Math.min(Number(p?.duration_seconds || 30), 600)), bpm: p?.bpm, key: p?.key }); const u = d?.request_id ? await wait(key, d.request_id, 'tracks') : media(d); return json(r, e, { ok: true, contract_version: CONTRACT, capability: 'music', provider: 'pixazo', model: 'tracks', request_id: id, result: { status: 'generated', audio_url: u, pixazo_request_id: d?.request_id || null } }); } return json(r, e, { ok: false, error: `Pixazo route not implemented for operation: ${op}`, request_id: id }, 404); } catch (err) { return json(r, e, { ok: false, contract_version: CONTRACT, provider: 'pixazo', status: 'provider_error', request_id: id, error: String(err instanceof Error ? err.message : err).slice(0, 2000) }, 502); } } };
+
+const cors = (r: Request, e: any) => {
+  const origin = r.headers.get('Origin') || '';
+  const allowed = String(e.ALLOWED_ORIGIN || '').split(',').map((x: string) => x.trim()).filter(Boolean);
+  return {
+    'Access-Control-Allow-Origin': origin && (!allowed.length || allowed.includes(origin)) ? origin : (allowed[0] || '*'),
+    'Vary': 'Origin',
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type,X-BeatVision-Contract,Authorization,X-BeatVision-Request'
+  };
+};
+
+const json = (r: Request, e: any, data: unknown, status = 200) =>
+  new Response(JSON.stringify(data, null, 2), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...cors(r, e) }
+  });
+
+const auth = (r: Request, e: any) =>
+  !e.GATEWAY_TOKEN || r.headers.get('Authorization') === `Bearer ${e.GATEWAY_TOKEN}`;
+
+const media = (d: any) =>
+  d?.output?.media_url?.[0] || d?.output?.media_url || d?.output || d?.imageUrl || d?.image_url || d?.url || null;
+
+const image = (p: any) => {
+  const values = p?.images?.images || p?.images || [];
+  const first = Array.isArray(values) ? values[0] : values;
+  return first?.image_url || first?.url || first?.data_url || null;
+};
+
+const clip = (value: unknown, max: number) => String(value ?? '').slice(0, max);
+
+const worldPrompt = (p: any, scene?: any) => {
+  const world = p?.world || {};
+  const style = clip(p?.style, 500);
+  const character = clip(JSON.stringify(world?.character_concept || {}), 900);
+  const locations = clip(JSON.stringify(world?.locations || []), 700);
+  const motifs = clip(JSON.stringify(world?.visual_motifs || []), 700);
+  const continuity = clip(JSON.stringify(world?.continuity_rules || []), 500);
+  const sceneText = scene ? clip(JSON.stringify(scene), 700) : '';
+  return clip([
+    'BeatVision cinematic music-video artwork.',
+    'Dark industrial realism, coherent recurring character and environment, cinematic lighting.',
+    'No text, logos, watermarks, captions, UI or typography.',
+    style ? `Style: ${style}` : '',
+    character ? `Character: ${character}` : '',
+    locations ? `Locations: ${locations}` : '',
+    motifs ? `Motifs: ${motifs}` : '',
+    continuity ? `Continuity: ${continuity}` : '',
+    sceneText ? `Scene: ${sceneText}` : 'Create a strong world establishing image.'
+  ].filter(Boolean).join('\n'), 2048);
+};
+
+async function call(path: string, key: string, body: any, model: string) {
+  const response = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache',
+      'Ocp-Apim-Subscription-Key': key
+    },
+    body: JSON.stringify(body)
+  });
+  const text = await response.text();
+  let data: any;
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!response.ok) {
+    throw new Error(`Pixazo ${model} ${response.status} at ${path}: ${String(data?.message || data?.error || text).slice(0, 1800)}`);
+  }
+  return data;
+}
+
+async function wait(key: string, requestId: string, model: string) {
+  const deadline = Date.now() + 120000;
+  while (Date.now() < deadline) {
+    const response = await fetch(`${STATUS}${encodeURIComponent(requestId)}`, {
+      headers: { 'Ocp-Apim-Subscription-Key': key, 'Cache-Control': 'no-cache' }
+    });
+    const text = await response.text();
+    let data: any;
+    try { data = JSON.parse(text); } catch { data = {}; }
+    if (!response.ok) throw new Error(`Pixazo ${model} status ${response.status}: ${text.slice(0, 1200)}`);
+    const state = String(data?.status || '').toUpperCase();
+    if (state === 'COMPLETED') {
+      const url = media(data);
+      if (!url) throw new Error(`Pixazo ${model} completed without media output.`);
+      return url;
+    }
+    if (['ERROR', 'FAILED', 'CANCELLED'].includes(state)) {
+      throw new Error(`Pixazo ${model} job ${state}: ${String(data?.error || 'unknown provider error').slice(0, 1600)}`);
+    }
+    await new Promise(resolve => setTimeout(resolve, 3000));
+  }
+  throw new Error(`Pixazo ${model} job timed out after 120 seconds.`);
+}
+
+async function img(key: string, model: 'flux-schnell' | 'sd3-5' | 'sdxl', promptText: string) {
+  if (model === 'flux-schnell') {
+    const data = await call('/flux-1-schnell/v1/getData', key, {
+      prompt: clip(promptText, 2048),
+      num_steps: 4,
+      height: 1024,
+      width: 1024
+    }, model);
+    const url = media(data);
+    if (!url) throw new Error(`Pixazo ${model} returned no image URL.`);
+    return url;
+  }
+
+  if (model === 'sd3-5') {
+    const data = await call('/sd3-5/v1/r-sd-3-5-large', key, {
+      prompt: clip(promptText, 12000),
+      aspect_ratio: '16:9',
+      cfg: 5,
+      steps: 35,
+      output_format: 'webp',
+      output_quality: 90
+    }, model);
+    if (data?.request_id) return wait(key, data.request_id, model);
+    const url = media(data);
+    if (!url) throw new Error(`Pixazo ${model} returned no image URL.`);
+    return url;
+  }
+
+  const data = await call('/getImage/v1/getSDXLImage', key, {
+    prompt: clip(promptText, 12000),
+    height: 1024,
+    width: 1024,
+    num_steps: 20,
+    guidance_scale: 5
+  }, model);
+  const url = media(data);
+  if (!url) throw new Error(`Pixazo ${model} returned no image URL.`);
+  return url;
+}
+
+async function labeled(label: string, work: () => Promise<string>) {
+  try { return await work(); }
+  catch (error) { throw new Error(`${label}: ${error instanceof Error ? error.message : String(error)}`); }
+}
+
+async function animate(r: Request, e: any, key: string, payload: any, requestId: string) {
+  const raw = image(payload);
+  if (!raw) return json(r, e, {
+    ok: false,
+    contract_version: CONTRACT,
+    capability: 'video',
+    provider: 'pixazo',
+    model: 'ltx-video',
+    status: 'invalid_input',
+    request_id: requestId,
+    error: 'No approved scene image was supplied.'
+  }, 400);
+
+  const started = Date.now();
+  try {
+    const source = raw.startsWith('data:')
+      ? await resolveShotstackSource(raw, e.SHOTSTACK_API_KEY || '', 'beatvision-scene.jpg')
+      : raw;
+
+    const data = await call('/ltx-video/v1/image-to-video', key, {
+      prompt: clip(worldPrompt(payload, payload?.storyboard?.scenes?.[0]), 4000),
+      image_url: source,
+      aspect: '16:9',
+      num_frames: 121,
+      frame_rate: 24,
+      steps: 8,
+      cfg: 3
+    }, 'ltx-video');
+
+    const videoUrl = data?.request_id ? await wait(key, data.request_id, 'ltx-video') : media(data);
+    if (!videoUrl) throw new Error('Pixazo LTX returned no video URL.');
+
+    return json(r, e, {
+      ok: true,
+      contract_version: CONTRACT,
+      capability: 'video',
+      provider: 'pixazo',
+      model: 'ltx-video',
+      status: 'animated',
+      latency_ms: Date.now() - started,
+      request_id: requestId,
+      result: {
+        status: 'animated',
+        video_url: videoUrl,
+        source: 'Pixazo free LTX image-to-video',
+        pixazo_request_id: data?.request_id || null
+      }
+    });
+  } catch (error) {
+    return json(r, e, {
+      ok: false,
+      contract_version: CONTRACT,
+      capability: 'video',
+      provider: 'pixazo',
+      model: 'ltx-video',
+      status: 'provider_error',
+      request_id: requestId,
+      latency_ms: Date.now() - started,
+      error: String(error instanceof Error ? error.message : error).slice(0, 2000)
+    }, 502);
+  }
+}
+
+export default {
+  async fetch(r: Request, e: any) {
+    if (r.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(r, e) });
+    const requestId = r.headers.get('X-BeatVision-Request') || crypto.randomUUID();
+    if (!auth(r, e)) return json(r, e, { ok: false, error: 'Unauthorized', request_id: requestId }, 401);
+    if (r.method !== 'POST') return json(r, e, { ok: false, error: 'POST required', request_id: requestId }, 405);
+
+    const key = e.PIXAZO_API_KEY;
+    if (!key) return json(r, e, {
+      ok: false,
+      contract_version: CONTRACT,
+      status: 'provider_unavailable',
+      provider: 'pixazo',
+      request_id: requestId,
+      error: 'PIXAZO_API_KEY is not configured.'
+    }, 503);
+
+    let body: any;
+    try { body = await r.json(); }
+    catch { return json(r, e, { ok: false, error: 'Invalid JSON body', request_id: requestId }, 400); }
+
+    if (body?.contract_version !== CONTRACT) return json(r, e, {
+      ok: false,
+      error: 'Expected BeatVision contract 1.1.',
+      request_id: requestId
+    }, 400);
+
+    const payload = body.payload || {};
+    const operation = body.operation;
+
+    try {
+      if (operation === 'animate') return animate(r, e, key, payload, requestId);
+
+      if (operation === 'worldAssets') {
+        const character = await labeled('character / Flux Schnell', () => img(key, 'flux-schnell', worldPrompt(payload) + '\nFocus on the primary recurring character.'));
+        const environment = await labeled('environment / Flux Schnell', () => img(key, 'flux-schnell', worldPrompt(payload) + '\nFocus on the defining environment.'));
+        const hero = await labeled('hero / SDXL', () => img(key, 'sdxl', worldPrompt(payload) + '\nCreate a polished establishing keyframe.'));
+        return json(r, e, {
+          ok: true,
+          contract_version: CONTRACT,
+          capability: 'image',
+          provider: 'pixazo',
+          model: 'flux-1-schnell+sdxl',
+          request_id: requestId,
+          result: {
+            characters: [{ name: 'Primary BeatVision character', image_url: character }],
+            environments: [{ name: 'Primary BeatVision environment', image_url: environment }],
+            hero_image_url: hero,
+            models_used: ['flux-1-schnell', 'sdxl']
+          }
+        });
+      }
+
+      if (operation === 'sceneImages') {
+        const scenes = Array.isArray(payload?.storyboard?.scenes) ? payload.storyboard.scenes.slice(0, 8) : [];
+        if (!scenes.length) return json(r, e, {
+          ok: false,
+          status: 'invalid_input',
+          request_id: requestId,
+          error: 'Storyboard contains no scenes.'
+        }, 400);
+        const images = [];
+        for (let i = 0; i < scenes.length; i += 1) {
+          const scene = scenes[i];
+          const imageUrl = await labeled(`scene ${i + 1} / SD3.5`, () => img(key, 'sd3-5', worldPrompt(payload, scene)));
+          images.push({ scene: Number(scene.scene || i + 1), status: 'generated', image_url: imageUrl });
+        }
+        return json(r, e, {
+          ok: true,
+          contract_version: CONTRACT,
+          capability: 'image',
+          provider: 'pixazo',
+          model: 'sd3.5',
+          request_id: requestId,
+          result: { images, models_used: ['sd3.5'] }
+        });
+      }
+
+      if (operation === 'generateMusic') {
+        const data = await call('/tracks/v1/generate', key, {
+          prompt: clip(payload?.music_prompt || payload?.style || 'cinematic instrumental music', 5000),
+          lyrics: clip(payload?.lyrics, 12000),
+          instrumental: !payload?.lyrics,
+          duration: Math.max(10, Math.min(Number(payload?.duration_seconds || 30), 600)),
+          ...(payload?.bpm ? { bpm: Number(payload.bpm) } : {}),
+          ...(payload?.key ? { key: String(payload.key) } : {})
+        }, 'tracks');
+        const audioUrl = data?.request_id ? await wait(key, data.request_id, 'tracks') : media(data);
+        if (!audioUrl) throw new Error('Pixazo Tracks returned no audio URL.');
+        return json(r, e, {
+          ok: true,
+          contract_version: CONTRACT,
+          capability: 'music',
+          provider: 'pixazo',
+          model: 'tracks',
+          request_id: requestId,
+          result: { status: 'generated', audio_url: audioUrl, pixazo_request_id: data?.request_id || null }
+        });
+      }
+
+      return json(r, e, {
+        ok: false,
+        error: `Pixazo route not implemented for operation: ${operation}`,
+        request_id: requestId
+      }, 404);
+    } catch (error) {
+      return json(r, e, {
+        ok: false,
+        contract_version: CONTRACT,
+        provider: 'pixazo',
+        status: 'provider_error',
+        request_id: requestId,
+        error: String(error instanceof Error ? error.message : error).slice(0, 2000)
+      }, 502);
+    }
+  }
+};
