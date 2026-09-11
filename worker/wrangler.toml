@@ -1,5 +1,5 @@
 name = "beatvision-provider-arena"
-main = "src/video-fallback-gateway.ts"
+main = "src/arena-entry.ts"
 compatibility_date = "2026-09-09"
 
 [vars]
@@ -13,13 +13,14 @@ PIXAZO_SCENE_IMAGE_MODEL = "sdxl"
 PIXAZO_HERO_IMAGE_MODEL = "sdxl"
 
 # Free Pixazo models used by the active Arena creative path only:
-# Flux Schnell = fast world/character/environment concepts.
-# SDXL = world hero/keyframes and 16:9 scene imagery.
+# Flux Schnell = fast world/character/environment concepts and scene fallback.
+# SDXL = world hero/keyframes and preferred scene imagery.
 # LTX = image-to-video generative motion.
 # Tracks = optional music/score generation.
 #
+# Scene generation is wrapped by src/arena-entry.ts so transient SDXL failures
+# are retried before falling back to free Flux Schnell. No paid model is used.
 # Stable Diffusion 3.5 is intentionally NOT configured or called by Arena.
-# This prevents a paid/balance-gated model from being selected accidentally.
 #
 # Pollinations remains only for the already-proven Whisper audio analysis
 # and language/world-direction calls because Pixazo does not replace those
