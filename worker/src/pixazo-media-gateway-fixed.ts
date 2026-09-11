@@ -33,6 +33,11 @@ const image = (p: any) => {
   return first?.image_url || first?.url || first?.data_url || null;
 };
 
+const imageItems = (p: any) => {
+  const values = p?.images?.images || p?.images || [];
+  return Array.isArray(values) ? values.filter((item: any) => item?.image_url || item?.url || item?.data_url) : [];
+};
+
 const clip = (value: unknown, max: number) => String(value ?? '').slice(0, max);
 
 const worldPrompt = (p: any, scene?: any) => {
@@ -130,8 +135,8 @@ async function labeled(label: string, work: () => Promise<string>) {
 }
 
 async function animate(r: Request, e: any, key: string, payload: any, requestId: string) {
-  const raw = image(payload);
-  if (!raw) return json(r, e, {
+  const items = imageItems(payload);
+  if (!items.length) return json(r, e, {
     ok: false,
     contract_version: CONTRACT,
     capability: 'video',
@@ -139,27 +144,43 @@ async function animate(r: Request, e: any, key: string, payload: any, requestId:
     model: 'ltx-video',
     status: 'invalid_input',
     request_id: requestId,
-    error: 'No approved scene image was supplied.'
+    error: 'No approved scene images were supplied.'
   }, 400);
 
+  const scenes = Array.isArray(payload?.storyboard?.scenes) ? payload.storyboard.scenes : [];
   const started = Date.now();
+  const clips: Array<{ scene: number; status: string; video_url: string; source: string; pixazo_request_id: string | null }> = [];
+
   try {
-    const source = raw.startsWith('data:')
-      ? await resolveShotstackSource(raw, e.SHOTSTACK_API_KEY || '', 'beatvision-scene.jpg')
-      : raw;
+    for (let i = 0; i < items.length; i += 1) {
+      const item = items[i];
+      const raw = item?.image_url || item?.url || item?.data_url;
+      const sceneNumber = Number(item?.scene || scenes[i]?.scene || i + 1);
+      const scene = scenes.find((candidate: any) => Number(candidate?.scene) === sceneNumber) || scenes[i];
+      const source = String(raw).startsWith('data:')
+        ? await resolveShotstackSource(String(raw), e.SHOTSTACK_API_KEY || '', `beatvision-scene-${sceneNumber}.jpg`)
+        : String(raw);
 
-    const data = await call('/ltx-video/v1/image-to-video', key, {
-      prompt: clip(worldPrompt(payload, payload?.storyboard?.scenes?.[0]), 4000),
-      image_url: source,
-      aspect: '16:9',
-      num_frames: 121,
-      frame_rate: 24,
-      steps: 8,
-      cfg: 3
-    }, 'ltx-video');
+      const data = await call('/ltx-video/v1/image-to-video', key, {
+        prompt: clip(worldPrompt(payload, scene), 4000),
+        image_url: source,
+        aspect: '16:9',
+        num_frames: 121,
+        frame_rate: 24,
+        steps: 8,
+        cfg: 3
+      }, 'ltx-video');
 
-    const videoUrl = data?.request_id ? await wait(key, data.request_id, 'ltx-video') : media(data);
-    if (!videoUrl) throw new Error('Pixazo LTX returned no video URL.');
+      const videoUrl = data?.request_id ? await wait(key, data.request_id, 'ltx-video') : media(data);
+      if (!videoUrl) throw new Error(`Pixazo LTX scene ${sceneNumber} returned no video URL.`);
+      clips.push({
+        scene: sceneNumber,
+        status: 'animated',
+        video_url: videoUrl,
+        source: 'Pixazo free LTX image-to-video',
+        pixazo_request_id: data?.request_id || null
+      });
+    }
 
     return json(r, e, {
       ok: true,
@@ -172,9 +193,12 @@ async function animate(r: Request, e: any, key: string, payload: any, requestId:
       request_id: requestId,
       result: {
         status: 'animated',
-        video_url: videoUrl,
+        clips,
+        video_url: clips[0]?.video_url || null,
         source: 'Pixazo free LTX image-to-video',
-        pixazo_request_id: data?.request_id || null
+        models_used: ['ltx-video'],
+        scene_count: clips.length,
+        pixazo_request_ids: clips.map(clip => clip.pixazo_request_id).filter(Boolean)
       }
     });
   } catch (error) {
@@ -187,6 +211,8 @@ async function animate(r: Request, e: any, key: string, payload: any, requestId:
       status: 'provider_error',
       request_id: requestId,
       latency_ms: Date.now() - started,
+      completed_scene_count: clips.length,
+      completed_scenes: clips.map(clip => clip.scene),
       error: String(error instanceof Error ? error.message : error).slice(0, 2000)
     }, 502);
   }
