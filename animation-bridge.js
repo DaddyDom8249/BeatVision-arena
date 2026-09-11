@@ -1,20 +1,58 @@
 const BV_ANIMATION_JOB_KEY='beatvision_animation_job';
+const BV_RETRY_DELAYS=[2000,5000,10000];
+async function bvNetworkFetch(url,options={},label='request'){
+ let last;
+ for(let attempt=0;attempt<=BV_RETRY_DELAYS.length;attempt++){
+  try{
+   return await fetch(url,options);
+  }catch(error){
+   last=error;
+   if(attempt===BV_RETRY_DELAYS.length)break;
+   log(`${label} network interruption; retrying ${attempt+1}/${BV_RETRY_DELAYS.length}.`);
+   await new Promise(resolve=>setTimeout(resolve,BV_RETRY_DELAYS[attempt]));
+  }
+ }
+ throw new Error(`${label} failed after network retries: ${last?.message||'Failed to fetch'}`);
+}
 async function bvStartPersistentAnimation(payload){
  const base=gateway(); if(!base) throw new Error('No gateway URL configured.');
  const jobId=crypto.randomUUID(); localStorage.setItem(BV_ANIMATION_JOB_KEY,jobId);
- const r=await fetch(`${base}/v1/video/animate/jobs/${jobId}`,{method:'POST',headers:{...gatewayHeaders(),'X-BeatVision-Contract':C.version,'X-BeatVision-Request':jobId},body:JSON.stringify(payload)});
- const text=await r.text();let d;try{d=JSON.parse(text)}catch{d={raw:text}};if(!r.ok)throw new Error(`${r.status}: ${d.error||text}`);return d;
+ const r=await bvNetworkFetch(`${base}/v1/video/animate/jobs/${jobId}`,{method:'POST',headers:{...gatewayHeaders(),'X-BeatVision-Contract':C.version,'X-BeatVision-Request':jobId},body:JSON.stringify(payload)},'Animation job submission');
+ const text=await r.text();let d;try{d=JSON.parse(text)}catch{d={raw:text}};if(!r.ok)throw Object.assign(new Error(`${r.status}: ${d.error||text}`),{status:r.status,data:d});return d;
 }
 async function bvWaitPersistentAnimation(jobId,onUpdate){
  const base=gateway();
  while(true){
-  const r=await fetch(`${base}/v1/video/animate/jobs/${jobId}`,{headers:gatewayHeaders()});
-  const text=await r.text();let d;try{d=JSON.parse(text)}catch{d={raw:text}};if(!r.ok)throw new Error(`${r.status}: ${d.error||text}`);
+  const r=await bvNetworkFetch(`${base}/v1/video/animate/jobs/${jobId}`,{headers:gatewayHeaders()},'Animation job status');
+  const text=await r.text();let d;try{d=JSON.parse(text)}catch{d={raw:text}};if(!r.ok)throw Object.assign(new Error(`${r.status}: ${d.error||text}`),{status:r.status,data:d});
   onUpdate?.(d);
   if(d.status==='completed'||d.status==='partial'||d.status==='failed')return d;
   await new Promise(resolve=>setTimeout(resolve,5000));
  }
 }
+
+/* Replace the browser-side gateway call with a small network-resilience layer.
+   This is specifically for mobile browsers that suspend/tear down fetches when
+   the screen turns off. It does not retry provider jobs, only interrupted HTTP
+   transport. Provider retry policy remains server-side. */
+if(typeof window.callGateway==='function'){
+ const originalCallGateway=window.callGateway;
+ window.callGateway=async function(operation,payload){
+  let last;
+  for(let attempt=0;attempt<=BV_RETRY_DELAYS.length;attempt++){
+   try{return await originalCallGateway(operation,payload)}catch(error){
+    last=error;
+    const status=Number(error?.status||0);
+    const transport=!status || status===408 || status===429 || status>=500;
+    if(!transport||attempt===BV_RETRY_DELAYS.length)throw error;
+    log(`${operation} transport interrupted; retrying ${attempt+1}/${BV_RETRY_DELAYS.length}.`);
+    await new Promise(resolve=>setTimeout(resolve,BV_RETRY_DELAYS[attempt]));
+   }
+  }
+  throw last;
+ };
+}
+
 async function persistentRunPipeline(){
  if(state.running)return; state.running=true; state.mode='live'; $('runPipeline').disabled=true; $('runDemo').disabled=true; $('gatewayToken').disabled=false; $('log').value='';
  log('Starting live provider pipeline with persistent server-side animation.');
