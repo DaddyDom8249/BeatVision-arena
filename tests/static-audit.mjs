@@ -44,9 +44,10 @@ if (!arena.includes('for (let attempt = 1; attempt <= 3; attempt += 1)')) throw 
 
 const pixazo = read('worker/src/pixazo-media-gateway-fixed.ts');
 if (!pixazo.includes('/ltx-video/v1/image-to-video')) throw new Error('LTX image-to-video route is missing.');
-if (!pixazo.includes('120000') || !pixazo.includes('3000')) throw new Error('LTX polling deadline/interval guard is missing.');
-const ltxPolls = Math.floor(120000 / 3000);
+if (!pixazo.includes('LTX_TIMEOUT_MS = 300000') || !pixazo.includes('LTX_POLL_INTERVAL_MS = 7000')) throw new Error('LTX polling deadline/interval guard is missing.');
+const ltxPolls = Math.floor(300000 / 7000) + 1;
 if (1 + ltxPolls > 50) throw new Error(`LTX polling can exceed the free Worker subrequest ceiling: ${1 + ltxPolls}`);
+if (!pixazo.includes('timed out after ${LTX_TIMEOUT_MS / 1000} seconds')) throw new Error('LTX timeout error must report the actual configured timeout.');
 
 const shotstack = read('worker/src/shotstack-gateway.ts');
 if (!shotstack.includes('requestedDuration') || !shotstack.includes('targetDuration')) throw new Error('Full-song assembly duration guard is missing.');
