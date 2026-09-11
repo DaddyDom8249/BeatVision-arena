@@ -57,6 +57,14 @@ function extractMotionClips(payload: any) {
   const single = payload?.motion?.video_url || payload?.motion?.result?.video_url || payload?.motion?.url || payload?.motion?.result?.url;
   return typeof single === 'string' && single ? [{ scene: 1, status: 'animated', video_url: single }] : [];
 }
+function requestedDuration(payload: any, fallback: number) {
+  const candidates = [payload?.audio?.duration_seconds, payload?.audio?.duration, payload?.analysis?.duration_seconds];
+  for (const value of candidates) {
+    const n = Number(value);
+    if (Number.isFinite(n) && n > 0) return Math.min(n, 3600);
+  }
+  return fallback;
+}
 
 export default { async fetch(r: Request, e: any) {
   if (r.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(r, e) });
@@ -70,12 +78,22 @@ export default { async fetch(r: Request, e: any) {
   try {
     const resolved: Array<{ src: string; length: number; scene: number }> = [];
     for (let i = 0; i < motionClips.length; i++) { const clip = motionClips[i]; const src = await resolveShotstackSource(clip.video_url || clip.url, key, `beatvision-motion-${i + 1}.mp4`); resolved.push({ src, length: clipLength(clip), scene: Number(clip.scene || i + 1) }); }
-    const audioInput = payload.audio_base64 || payload.audio_data || null; const audioSrc = audioInput ? await resolveShotstackSource(audioInput, key, 'beatvision-song.mp3') : null; const totalVideo = resolved.reduce((sum, x) => sum + x.length, 0);
-    const videoClips = resolved.reduce((arr: any[], item, index) => { const start = arr.reduce((sum, x) => sum + Number(x.length || 0), 0); arr.push({ asset: { type: 'video', src: item.src }, start, length: item.length, fit: 'crop', transition: index === 0 ? undefined : { in: 'fade', out: 'fade' }, effect: index % 2 === 0 ? 'zoomIn' : 'zoomOut' }); return arr; }, []);
-    const tracks: any[] = [{ clips: videoClips }]; if (audioSrc) tracks.push({ clips: [{ asset: { type: 'audio', src: audioSrc }, start: 0, length: totalVideo, volume: 1 }] });
+    const audioInput = payload.audio_base64 || payload.audio_data || null; const audioSrc = audioInput ? await resolveShotstackSource(audioInput, key, 'beatvision-song.mp3') : null; const rawVisualDuration = resolved.reduce((sum, x) => sum + x.length, 0); const targetDuration = requestedDuration(payload, rawVisualDuration);
+    const videoClips: any[] = [];
+    let cursor = 0;
+    let cycle = 0;
+    while (cursor < targetDuration - 0.001) {
+      const item = resolved[cycle % resolved.length];
+      const length = Math.min(item.length, targetDuration - cursor);
+      videoClips.push({ asset: { type: 'video', src: item.src }, start: cursor, length, fit: 'crop', transition: videoClips.length === 0 ? undefined : { in: 'fade', out: 'fade' }, effect: videoClips.length % 2 === 0 ? 'zoomIn' : 'zoomOut' });
+      cursor += length;
+      cycle += 1;
+      if (cycle > 10000) throw new Error('Assembly safety limit exceeded while extending visual coverage.');
+    }
+    const tracks: any[] = [{ clips: videoClips }]; if (audioSrc) tracks.push({ clips: [{ asset: { type: 'audio', src: audioSrc }, start: 0, length: targetDuration, volume: 1 }] });
     const edit = { timeline: { background: '#000000', tracks }, output: { format: 'mp4', resolution: 'hd', aspectRatio: '16:9', fps: 25 } };
     const queued = await shotstackFetch('/edit/stage/render', key, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(edit) }); const renderId = queued?.response?.id; if (!renderId) throw new Error('Shotstack did not return a render ID.');
-    const deadline = Date.now() + 150_000; let last: any = null; while (Date.now() < deadline) { last = await shotstackFetch(`/edit/stage/render/${encodeURIComponent(renderId)}`, key); const response = last?.response || last?.data || {}; const status = String(response.status || '').toLowerCase(); if (status === 'done') return json(r, e, { ok: true, contract_version: '1.1', capability: 'video', provider: 'shotstack', environment: 'sandbox', delivery: 'temporary_url', watermark: true, latency_ms: Date.now() - started, request_id: id, result: { status: 'assembled', render_id: renderId, preview_url: response.url, video_url: response.url, duration_seconds: response.duration || totalVideo, source_clips: resolved.length, source_audio: !!audioSrc } }); if (['failed', 'error'].includes(status)) throw new Error(`Shotstack render failed: ${String(response.error || status).slice(0, 1800)}`); await new Promise(resolve => setTimeout(resolve, 5000)); }
-    return json(r, e, { ok: true, contract_version: '1.1', capability: 'video', provider: 'shotstack', environment: 'sandbox', delivery: 'render_id', watermark: true, status: 'queued', latency_ms: Date.now() - started, request_id: id, result: { status: 'queued', render_id: renderId, message: 'Shotstack render is still processing.', last_status: last?.response?.status || null } });
+    const deadline = Date.now() + 150_000; let last: any = null; while (Date.now() < deadline) { last = await shotstackFetch(`/edit/stage/render/${encodeURIComponent(renderId)}`, key); const response = last?.response || last?.data || {}; const status = String(response.status || '').toLowerCase(); if (status === 'done') return json(r, e, { ok: true, contract_version: '1.1', capability: 'video', provider: 'shotstack', environment: 'sandbox', delivery: 'temporary_url', watermark: true, latency_ms: Date.now() - started, request_id: id, result: { status: 'assembled', render_id: renderId, preview_url: response.url, video_url: response.url, duration_seconds: response.duration || targetDuration, source_clips: resolved.length, timeline_clips: videoClips.length, source_audio: !!audioSrc, target_duration_seconds: targetDuration } }); if (['failed', 'error'].includes(status)) throw new Error(`Shotstack render failed: ${String(response.error || status).slice(0, 1800)}`); await new Promise(resolve => setTimeout(resolve, 5000)); }
+    return json(r, e, { ok: true, contract_version: '1.1', capability: 'video', provider: 'shotstack', environment: 'sandbox', delivery: 'render_id', watermark: true, status: 'queued', latency_ms: Date.now() - started, request_id: id, result: { status: 'queued', render_id: renderId, message: 'Shotstack render is still processing.', last_status: last?.response?.status || null, target_duration_seconds: targetDuration, timeline_clips: videoClips.length } });
   } catch (err) { const msg = err instanceof Error ? err.message : String(err); return json(r, e, { ok: false, contract_version: '1.1', capability: 'video', provider: 'shotstack', environment: 'sandbox', status: 'provider_error', request_id: id, latency_ms: Date.now() - started, error: msg.slice(0, 2000) }, 502); }
 } };
