@@ -2,7 +2,5 @@
   "name": "beatvision-provider-arena-worker",
   "private": true,
   "type": "module",
-  "dependencies": {
-    "@huggingface/inference": "latest"
-  }
+  "dependencies": {}
 }
