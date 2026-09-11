@@ -7,23 +7,30 @@ ALLOWED_ORIGIN = "https://daddydom8249.github.io"
 LANGUAGE_PROVIDER_MODEL = "openai"
 LANGUAGE_PROVIDER = "pollinations"
 LANGUAGE_PROVIDER_URL = "https://gen.pollinations.ai/v1/chat/completions"
-IMAGE_PROVIDER = "pollinations"
-IMAGE_PROVIDER_MODEL = "flux"
 VIDEO_PROVIDER = "pixazo"
+PIXAZO_WORLD_IMAGE_MODEL = "flux-schnell"
+PIXAZO_SCENE_IMAGE_MODEL = "sd3.5"
+PIXAZO_HERO_IMAGE_MODEL = "sdxl"
 PIXAZO_LTX_RESOLUTION = "720p"
 PIXAZO_LTX_DURATION = "5"
 PIXAZO_LTX_FPS = "25"
+PIXAZO_TRACKS_DURATION = "30"
 
-# Pollinations = language, image and audio.
-# Free Pixazo LTX = primary generative motion provider.
-# Shotstack Sandbox = MP4 assembly and deterministic camera-motion fallback.
-# Hugging Face is intentionally NOT used as a motion fallback because its
-# Inference Providers can consume included monthly quota and then require paid credits.
+# Pixazo is the unified creative-generation provider:
+# Flux Schnell = fast world/character/environment images.
+# Stable Diffusion 3.5 = scene images and continuity-focused artwork.
+# SDXL = polished world hero/keyframe artwork.
+# LTX = generative image-to-video motion.
+# Tracks = optional music/score generation.
+# Pollinations remains only for the currently proven Whisper audio analysis
+# and language/world-direction calls; Pixazo's current free catalog does not
+# provide a free general LLM or speech-to-text equivalent.
+# Shotstack Sandbox remains the deterministic editor/assembly layer.
+# Hugging Face is intentionally not used by the Arena video path.
 #
 # Secrets expected by the worker:
 # wrangler secret put GATEWAY_TOKEN
 # wrangler secret put LANGUAGE_PROVIDER_TOKEN
-# wrangler secret put IMAGE_PROVIDER_TOKEN
 # wrangler secret put AUDIO_PROVIDER_TOKEN
 # wrangler secret put PIXAZO_API_KEY
 # wrangler secret put SHOTSTACK_API_KEY
