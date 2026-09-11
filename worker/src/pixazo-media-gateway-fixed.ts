@@ -86,7 +86,7 @@ async function wait(key: string, requestId: string, model: string) {
     try { data = JSON.parse(text); } catch { data = {}; }
     if (!response.ok) throw new Error(`Pixazo ${model} status ${response.status}: ${text.slice(0, 1200)}`);
     const state = String(data?.status || '').toUpperCase();
-    if (state === 'COMPLETED') {
+    if (state === 'COMPLETED' || state === 'SUCCEEDED') {
       const url = media(data);
       if (!url) throw new Error(`Pixazo ${model} completed without media output.`);
       return url;
@@ -99,7 +99,7 @@ async function wait(key: string, requestId: string, model: string) {
   throw new Error(`Pixazo ${model} job timed out after 120 seconds.`);
 }
 
-async function img(key: string, model: 'flux-schnell' | 'sd3-5' | 'sdxl', promptText: string) {
+async function img(key: string, model: 'flux-schnell' | 'sdxl', promptText: string, aspect: 'square' | 'wide' = 'square') {
   if (model === 'flux-schnell') {
     const data = await call('/flux-1-schnell/v1/getData', key, {
       prompt: clip(promptText, 2048),
@@ -112,27 +112,12 @@ async function img(key: string, model: 'flux-schnell' | 'sd3-5' | 'sdxl', prompt
     return url;
   }
 
-  if (model === 'sd3-5') {
-    const data = await call('/sd3-5/v1/r-sd-3-5-large', key, {
-      prompt: clip(promptText, 12000),
-      aspect_ratio: '16:9',
-      cfg: 5,
-      steps: 35,
-      output_format: 'webp',
-      output_quality: 90
-    }, model);
-    if (data?.request_id) return wait(key, data.request_id, model);
-    const url = media(data);
-    if (!url) throw new Error(`Pixazo ${model} returned no image URL.`);
-    return url;
-  }
-
   const data = await call('/getImage/v1/getSDXLImage', key, {
     prompt: clip(promptText, 12000),
-    height: 1024,
+    height: aspect === 'wide' ? 576 : 1024,
     width: 1024,
     num_steps: 20,
-    guidance_scale: 5
+    guidance: 5
   }, model);
   const url = media(data);
   if (!url) throw new Error(`Pixazo ${model} returned no image URL.`);
@@ -271,7 +256,7 @@ export default {
         const images = [];
         for (let i = 0; i < scenes.length; i += 1) {
           const scene = scenes[i];
-          const imageUrl = await labeled(`scene ${i + 1} / SD3.5`, () => img(key, 'sd3-5', worldPrompt(payload, scene)));
+          const imageUrl = await labeled(`scene ${i + 1} / SDXL Free`, () => img(key, 'sdxl', worldPrompt(payload, scene), 'wide'));
           images.push({ scene: Number(scene.scene || i + 1), status: 'generated', image_url: imageUrl });
         }
         return json(r, e, {
@@ -279,9 +264,9 @@ export default {
           contract_version: CONTRACT,
           capability: 'image',
           provider: 'pixazo',
-          model: 'sd3.5',
+          model: 'sdxl',
           request_id: requestId,
-          result: { images, models_used: ['sd3.5'] }
+          result: { images, models_used: ['sdxl'] }
         });
       }
 
