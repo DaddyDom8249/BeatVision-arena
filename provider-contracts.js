@@ -8,9 +8,10 @@ window.BeatVisionContracts = {
     sceneImages: { capability: "image", path: "/v1/image/scenes" },
     animate: { capability: "video", path: "/v1/video/animate" },
     assemble: { capability: "video", path: "/v1/video/assemble" },
+    generateMusic: { capability: "music", path: "/v1/audio/generate" },
     storeAsset: { capability: "storage", path: "/v1/storage/asset" }
   },
-  capabilities: ["language", "image", "video", "audio", "storage"],
+  capabilities: ["language", "image", "video", "audio", "music", "storage"],
   stages: [
     ["analyze", "Audio analysis", "audio"],
     ["world", "Reveal the World", "language"],
