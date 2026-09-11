@@ -17,6 +17,39 @@ function dataUrlToBlob(value: string) { const comma = value.indexOf(','); if (co
 async function shotstackFetch(path: string, key: string, init: RequestInit = {}) { const headers = new Headers(init.headers || {}); headers.set('x-api-key', key); headers.set('Accept', 'application/json'); const response = await fetch(`${BASE}${path}`, { ...init, headers }); const text = await response.text(); let data: any; try { data = JSON.parse(text); } catch { data = { raw: text }; } if (!response.ok) throw new Error(`Shotstack ${response.status}: ${String(data?.message || data?.error || text).slice(0, 1800)}`); return data; }
 async function uploadDataUrl(value: string, key: string, filename: string) { const blob = dataUrlToBlob(value); const ticket = await shotstackFetch('/ingest/stage/upload', key, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename }) }); const id = ticket?.data?.id || ticket?.data?.attributes?.id; const signed = ticket?.data?.attributes?.url; if (!id || !signed) throw new Error('Shotstack ingest did not return a signed upload URL.'); const put = await fetch(signed, { method: 'PUT', headers: { 'Content-Type': blob.type || 'application/octet-stream' }, body: blob }); if (!put.ok) throw new Error(`Shotstack source upload returned ${put.status}.`); const deadline = Date.now() + 90_000; while (Date.now() < deadline) { const status = await shotstackFetch(`/ingest/stage/sources/${encodeURIComponent(id)}`, key); const attrs = status?.data?.attributes || {}; if (attrs.status === 'ready' && attrs.source) return attrs.source as string; if (['failed', 'error'].includes(String(attrs.status || '').toLowerCase())) throw new Error(`Shotstack source ingest failed: ${String(attrs.error || attrs.status)}`); await new Promise(resolve => setTimeout(resolve, 2000)); } throw new Error('Shotstack source ingest timed out after 90 seconds.'); }
 export async function resolveShotstackSource(value: unknown, key: string, filename: string) { if (typeof value !== 'string' || !value) throw new Error(`Missing ${filename} source.`); if (value.startsWith('data:')) return uploadDataUrl(value, key, filename); if (/^https?:\/\//i.test(value)) return value; throw new Error(`Unsupported ${filename} source. Expected an https URL or data URL.`); }
+
+export async function animateStillWithShotstack(r: Request, e: any, image: string, id: string) {
+  const key = e.SHOTSTACK_API_KEY;
+  if (!key) return json(r, e, { ok: false, contract_version: '1.1', capability: 'video', provider: 'shotstack', environment: 'sandbox', status: 'provider_unavailable', request_id: id, error: 'Shotstack Sandbox is not configured.' }, 503);
+  const started = Date.now();
+  try {
+    const src = await resolveShotstackSource(image, key, 'beatvision-motion-source.jpg');
+    const length = Math.max(2, Math.min(Number(e.PIXAZO_LTX_DURATION || 5), 10));
+    const edit = {
+      timeline: { background: '#000000', tracks: [{ clips: [{ asset: { type: 'image', src }, start: 0, length, fit: 'crop', effect: 'zoomIn' }] }] },
+      output: { format: 'mp4', resolution: 'hd', aspectRatio: '16:9', fps: 25 }
+    };
+    const queued = await shotstackFetch('/edit/stage/render', key, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(edit) });
+    const renderId = queued?.response?.id;
+    if (!renderId) throw new Error('Shotstack did not return a render ID for camera-motion fallback.');
+    const deadline = Date.now() + 150_000;
+    while (Date.now() < deadline) {
+      const last = await shotstackFetch(`/edit/stage/render/${encodeURIComponent(renderId)}`, key);
+      const response = last?.response || last?.data || {};
+      const status = String(response.status || '').toLowerCase();
+      if (status === 'done') {
+        return json(r, e, { ok: true, contract_version: '1.1', capability: 'video', provider: 'shotstack', model: 'camera-motion', environment: 'sandbox', delivery: 'temporary_url', watermark: true, fallback_from: 'pixazo', latency_ms: Date.now() - started, request_id: id, result: { status: 'animated', video_url: response.url, preview_url: response.url, render_id: renderId, duration_seconds: response.duration || length, source: 'Shotstack Sandbox deterministic camera-motion fallback', motion_type: 'zoomIn' } });
+      }
+      if (['failed', 'error'].includes(status)) throw new Error(`Shotstack camera-motion render failed: ${String(response.error || status).slice(0, 1800)}`);
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
+    return json(r, e, { ok: true, contract_version: '1.1', capability: 'video', provider: 'shotstack', model: 'camera-motion', environment: 'sandbox', delivery: 'render_id', watermark: true, fallback_from: 'pixazo', status: 'queued', request_id: id, result: { status: 'queued', render_id: renderId, message: 'Shotstack camera-motion fallback is still processing.' } });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return json(r, e, { ok: false, contract_version: '1.1', capability: 'video', provider: 'shotstack', model: 'camera-motion', environment: 'sandbox', status: 'provider_error', fallback_from: 'pixazo', request_id: id, latency_ms: Date.now() - started, error: msg.slice(0, 2000) }, 502);
+  }
+}
+
 function clipLength(clip: any) { const n = Number(clip?.duration_seconds || clip?.length || 4); return Number.isFinite(n) && n > 0 ? Math.min(n, 60) : 4; }
 function extractMotionClips(payload: any) { const clips = payload?.motion?.clips || payload?.motion?.result?.clips || []; return Array.isArray(clips) ? clips.filter((x: any) => x?.video_url || x?.url) : []; }
 
