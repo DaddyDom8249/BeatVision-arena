@@ -3,6 +3,8 @@ import { resolveShotstackSource } from './shotstack-gateway';
 const BASE = 'https://gateway.pixazo.ai';
 const STATUS = `${BASE}/v2/requests/status/`;
 const CONTRACT = '1.1';
+const LTX_TIMEOUT_MS = 300000;
+const LTX_POLL_INTERVAL_MS = 7000;
 
 const cors = (r: Request, e: any) => {
   const origin = r.headers.get('Origin') || '';
@@ -81,7 +83,7 @@ async function call(path: string, key: string, body: any, model: string) {
 }
 
 async function wait(key: string, requestId: string, model: string) {
-  const deadline = Date.now() + 120000;
+  const deadline = Date.now() + LTX_TIMEOUT_MS;
   while (Date.now() < deadline) {
     const response = await fetch(`${STATUS}${encodeURIComponent(requestId)}`, {
       headers: { 'Ocp-Apim-Subscription-Key': key, 'Cache-Control': 'no-cache' }
@@ -99,9 +101,9 @@ async function wait(key: string, requestId: string, model: string) {
     if (['ERROR', 'FAILED', 'CANCELLED'].includes(state)) {
       throw new Error(`Pixazo ${model} job ${state}: ${String(data?.error || 'unknown provider error').slice(0, 1600)}`);
     }
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise(resolve => setTimeout(resolve, LTX_POLL_INTERVAL_MS));
   }
-  throw new Error(`Pixazo ${model} job timed out after 120 seconds.`);
+  throw new Error(`Pixazo ${model} job timed out after ${LTX_TIMEOUT_MS / 1000} seconds.`);
 }
 
 async function img(key: string, model: 'flux-schnell' | 'sdxl', promptText: string, aspect: 'square' | 'wide' = 'square') {
