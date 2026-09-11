@@ -1,0 +1,44 @@
+name: BeatVision Arena Audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Static, bundle, and live failure-path audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: JavaScript syntax checks
+        run: |
+          node --check app.js
+          node --check provider-contracts.js
+          node --check log-guard.js
+          node --check motion-bridge.js
+          node --check tests/static-audit.mjs
+          node --check tests/live-smoke.mjs
+
+      - name: Worker bundle/type-surface checks
+        run: |
+          npx --yes esbuild worker/src/arena-entry.ts --bundle --format=esm --platform=neutral --outfile=/tmp/beatvision-arena-worker.mjs
+          npx --yes esbuild worker/src/index.ts --bundle --format=esm --platform=neutral --outfile=/tmp/beatvision-arena-index.mjs
+
+      - name: Static architecture audit
+        run: node tests/static-audit.mjs
+
+      - name: Live gateway failure-path smoke tests
+        run: node tests/live-smoke.mjs
