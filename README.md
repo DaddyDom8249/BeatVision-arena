@@ -14,8 +14,25 @@ The arena exposes a versioned provider-neutral contract for:
 - Audio intelligence
 - Image generation
 - Video generation
+- Music generation
 - Storage / delivery
 - Long-running execution through a gateway
+
+## Current provider architecture
+
+**Pixazo is the unified creative-generation provider.** Its current free catalog provides Flux Schnell, Stable Diffusion 3.5, SDXL, LTX and Tracks through one API key and common authentication pattern. citeturn3search0turn1search1
+
+BeatVision uses those models deliberately:
+
+- **Flux Schnell**: fast world, character and environment concepts.
+- **Stable Diffusion 3.5**: scene imagery with 16:9 composition support.
+- **SDXL**: polished world hero/keyframe artwork.
+- **LTX**: image-to-video generative motion.
+- **Tracks**: optional music/score generation.
+- **Shotstack Sandbox**: deterministic editing, stitching, transitions, audio and final MP4 assembly.
+- **Pollinations**: retained only for the already-proven Whisper audio analysis and language/world-direction layer, because Pixazo's current free catalog is focused on image, video and music rather than a free general LLM or speech-to-text replacement. citeturn3search0
+
+The Pixazo free catalog currently advertises no-card access, full REST access and a fair-use preview limit of 60 requests/minute/model. Commercial rights still depend on the individual model and Pixazo terms, so the Arena does not assume commercial licensing from the word "free." citeturn3search0
 
 ## Pipeline
 
@@ -36,11 +53,12 @@ Operations:
 - `POST /v1/image/scenes`
 - `POST /v1/video/animate`
 - `POST /v1/video/assemble`
+- `POST /v1/audio/generate`
 - `POST /v1/storage/asset`
 - `GET /v1/capabilities`
 - `GET /health`
 
-Every live request carries the contract version and a request ID. The gateway reports provider capability, latency, and upstream result/error information.
+Every live request carries the contract version and a request ID. The gateway reports provider capability, latency, model, and upstream result/error information.
 
 ## Security
 
@@ -58,4 +76,4 @@ Nothing here requires overwriting either existing project. Once an arena capabil
 
 ## Current status
 
-**Integration-ready foundation.** The UI supports deterministic and live modes, gateway health/capability discovery, capability-by-capability execution, request tracing, and a versioned provider contract. Actual end-to-end generation depends on the provider endpoints configured in the gateway.
+**Pixazo-first integration foundation.** The UI supports deterministic and live modes, gateway health/capability discovery, capability-by-capability execution, request tracing, and a versioned provider contract. The creative generation path is now centralized behind one Pixazo API credential while Shotstack remains the editing/assembly layer and Pollinations remains only where its already-proven analysis/language functions are still needed.
