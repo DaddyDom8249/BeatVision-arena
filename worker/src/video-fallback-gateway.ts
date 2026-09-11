@@ -15,7 +15,25 @@ export default { async fetch(r: Request, e: any) {
   if (path === '/' || path === '/health') return json(r, e, { ok: true, status: 'online', name: 'BeatVision Provider Gateway', contract_version: '1.1', creative_provider: 'pixazo', analysis_provider: 'pollinations', assembly_provider: 'shotstack-sandbox', fallback_provider: 'shotstack-camera-motion', request_id: id });
   if (path === '/v1/capabilities') {
     if (!auth(r, e)) return json(r, e, { ok: false, error: 'Unauthorized', request_id: id }, 401);
-    return json(r, e, { ok: true, contract_version: '1.1', capabilities: { language: { configured: !!e.LANGUAGE_PROVIDER_TOKEN, provider: e.LANGUAGE_PROVIDER || 'pollinations', model: e.LANGUAGE_PROVIDER_MODEL || 'openai' }, image: { configured: !!e.PIXAZO_API_KEY, provider: 'pixazo', models: ['flux-schnell', 'sdxl'] }, audio: { configured: !!(e.AUDIO_PROVIDER_TOKEN || e.LANGUAGE_PROVIDER_TOKEN), provider: 'pollinations', model: 'whisper-large-v3' }, video: { configured: !!e.PIXAZO_API_KEY, provider: 'pixazo', model: 'ltx-video' }, music: { configured: !!e.PIXAZO_API_KEY, provider: 'pixazo', model: 'tracks' }, assembly: { configured: !!e.SHOTSTACK_API_KEY, provider: 'shotstack-sandbox' }, fallback: { configured: !!e.SHOTSTACK_API_KEY, provider: 'shotstack-camera-motion', mode: 'deterministic_zoom' }, storage: { configured: !!e.STORAGE_PROVIDER_URL, provider: e.STORAGE_PROVIDER_URL || null, optional: true } }, request_id: id });
+    return json(r, e, { ok: true, contract_version: '1.1', capabilities: { language: { configured: !!e.LANGUAGE_PROVIDER_TOKEN, provider: e.LANGUAGE_PROVIDER || 'pollinations', model: e.LANGUAGE_PROVIDER_MODEL || 'openai' }, image: { configured: !!e.PIXAZO_API_KEY, provider: 'pixazo', models: ['flux-schnell', 'sdxl'] }, audio: { configured: !!(e.AUDIO_PROVIDER_TOKEN || e.LANGUAGE_PROVIDER_TOKEN), provider: 'pollinations', model: 'whisper-large-v3' }, video: { configured: !!e.PIXAZO_API_KEY, provider: 'pixazo', model: 'ltx-video' }, music: { configured: !!e.PIXAZO_API_KEY, provider: 'pixazo', model: 'tracks' }, assembly: { configured: !!e.SHOTSTACK_API_KEY, provider: 'shotstack-sandbox' }, fallback: { configured: !!e.SHOTSTACK_API_KEY, provider: 'shotstack-camera-motion', mode: 'deterministic_zoom' }, storage: { configured: !!e.STORAGE_PROVIDER_URL, provider: e.STORAGE_PROVIDER_URL || null, optional: true }, persistent_animation: { configured: !!e.ANIMATION_JOBS, provider: 'cloudflare-durable-object' } }, request_id: id });
+  }
+  if (path.startsWith('/v1/video/animate/jobs/')) {
+    if (!auth(r, e)) return json(r, e, { ok: false, error: 'Unauthorized', request_id: id }, 401);
+    if (!e.ANIMATION_JOBS) return json(r, e, { ok: false, status: 'provider_unavailable', error: 'Persistent animation binding is not configured.', request_id: id }, 503);
+    const jobId = path.split('/').filter(Boolean).pop() || id;
+    const stub = e.ANIMATION_JOBS.get(e.ANIMATION_JOBS.idFromName(jobId));
+    if (r.method === 'POST') {
+      const body = await r.clone().json().catch(() => null);
+      if (!body) return json(r, e, { ok: false, error: 'Invalid JSON animation job.', request_id: id }, 400);
+      const forwarded = new Request(r.url, { method: 'POST', headers: new Headers(r.headers), body: JSON.stringify({ ...body, job_id: jobId }) });
+      const response = await stub.fetch(forwarded);
+      return new Response(response.body, { status: response.status, headers: { ...Object.fromEntries(response.headers), ...cors(r, e) } });
+    }
+    if (r.method === 'GET') {
+      const response = await stub.fetch(new Request(r.url, { method: 'GET' }));
+      return new Response(response.body, { status: response.status, headers: { ...Object.fromEntries(response.headers), ...cors(r, e) } });
+    }
+    return json(r, e, { ok: false, error: 'GET or POST required', request_id: id }, 405);
   }
   if (path === '/v1/video/assemble') return shotstack.fetch(r, e);
   if (path === '/v1/video/animate') {
