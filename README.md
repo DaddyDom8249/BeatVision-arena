@@ -20,7 +20,7 @@ The arena exposes a versioned provider-neutral contract for:
 
 ## Current provider architecture
 
-**Pixazo is the unified creative-generation provider.** Its current free catalog provides Flux Schnell, Stable Diffusion 3.5, SDXL, LTX and Tracks through one API key and common authentication pattern. citeturn3search0turn1search1
+**Pixazo is the unified creative-generation provider.** Its current free catalog provides Flux Schnell, Stable Diffusion 3.5, SDXL, LTX and Tracks through one API key and common authentication pattern.
 
 BeatVision uses those models deliberately:
 
@@ -30,9 +30,9 @@ BeatVision uses those models deliberately:
 - **LTX**: image-to-video generative motion.
 - **Tracks**: optional music/score generation.
 - **Shotstack Sandbox**: deterministic editing, stitching, transitions, audio and final MP4 assembly.
-- **Pollinations**: retained only for the already-proven Whisper audio analysis and language/world-direction layer, because Pixazo's current free catalog is focused on image, video and music rather than a free general LLM or speech-to-text replacement. citeturn3search0
+- **Pollinations**: retained only for the already-proven Whisper audio analysis and language/world-direction layer, because Pixazo's current free catalog is focused on image, video and music rather than a free general LLM or speech-to-text replacement.
 
-The Pixazo free catalog currently advertises no-card access, full REST access and a fair-use preview limit of 60 requests/minute/model. Commercial rights still depend on the individual model and Pixazo terms, so the Arena does not assume commercial licensing from the word "free." citeturn3search0
+The Pixazo free catalog currently advertises no-card access, full REST access and a fair-use preview limit of 60 requests/minute/model. Commercial rights still depend on the individual model and Pixazo terms, so the Arena does not assume commercial licensing from the word "free."
 
 ## Pipeline
 
