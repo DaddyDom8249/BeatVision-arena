@@ -1,4 +1,4 @@
-import pixazo from './pixazo-media-gateway';
+import pixazo from './pixazo-media-gateway-fixed';
 import shotstack, { animateStillWithShotstack } from './shotstack-gateway';
 import pollinations from './pollinations-gateway-v2';
 
@@ -14,29 +14,14 @@ export default { async fetch(r: Request, e: any) {
   if (path === '/' || path === '/health') return json(r, e, { ok: true, status: 'online', name: 'BeatVision Provider Gateway', contract_version: '1.1', creative_provider: 'pixazo', analysis_provider: 'pollinations', assembly_provider: 'shotstack-sandbox', fallback_provider: 'shotstack-camera-motion', request_id: id });
   if (path === '/v1/capabilities') {
     if (!auth(r, e)) return json(r, e, { ok: false, error: 'Unauthorized', request_id: id }, 401);
-    return json(r, e, { ok: true, contract_version: '1.1', capabilities: {
-      language: { configured: !!e.LANGUAGE_PROVIDER_TOKEN, provider: e.LANGUAGE_PROVIDER || 'pollinations', model: e.LANGUAGE_PROVIDER_MODEL || 'openai' },
-      image: { configured: !!e.PIXAZO_API_KEY, provider: 'pixazo', models: ['flux-schnell','sd3.5','sdxl'] },
-      audio: { configured: !!(e.AUDIO_PROVIDER_TOKEN || e.LANGUAGE_PROVIDER_TOKEN), provider: 'pollinations', model: 'whisper-large-v3' },
-      video: { configured: !!e.PIXAZO_API_KEY, provider: 'pixazo', model: 'ltx' },
-      music: { configured: !!e.PIXAZO_API_KEY, provider: 'pixazo', model: 'tracks' },
-      assembly: { configured: !!e.SHOTSTACK_API_KEY, provider: 'shotstack-sandbox' },
-      fallback: { configured: !!e.SHOTSTACK_API_KEY, provider: 'shotstack-camera-motion', mode: 'deterministic_zoom' },
-      storage: { configured: !!e.STORAGE_PROVIDER_URL, provider: e.STORAGE_PROVIDER_URL || null, optional: true }
-    }, request_id: id });
+    return json(r, e, { ok: true, contract_version: '1.1', capabilities: { language: { configured: !!e.LANGUAGE_PROVIDER_TOKEN, provider: e.LANGUAGE_PROVIDER || 'pollinations', model: e.LANGUAGE_PROVIDER_MODEL || 'openai' }, image: { configured: !!e.PIXAZO_API_KEY, provider: 'pixazo', models: ['flux-schnell', 'sd3.5', 'sdxl'] }, audio: { configured: !!(e.AUDIO_PROVIDER_TOKEN || e.LANGUAGE_PROVIDER_TOKEN), provider: 'pollinations', model: 'whisper-large-v3' }, video: { configured: !!e.PIXAZO_API_KEY, provider: 'pixazo', model: 'ltx' }, music: { configured: !!e.PIXAZO_API_KEY, provider: 'pixazo', model: 'tracks' }, assembly: { configured: !!e.SHOTSTACK_API_KEY, provider: 'shotstack-sandbox' }, fallback: { configured: !!e.SHOTSTACK_API_KEY, provider: 'shotstack-camera-motion', mode: 'deterministic_zoom' }, storage: { configured: !!e.STORAGE_PROVIDER_URL, provider: e.STORAGE_PROVIDER_URL || null, optional: true } }, request_id: id });
   }
   if (path === '/v1/video/assemble') return shotstack.fetch(r, e);
   if (path === '/v1/video/animate') {
     if (!auth(r, e)) return json(r, e, { ok: false, error: 'Unauthorized', request_id: id }, 401);
-    const rawBody = await r.text();
-    let body: any; try { body = JSON.parse(rawBody); } catch { return json(r, e, { ok: false, contract_version: '1.1', capability: 'video', status: 'invalid_input', request_id: id, error: 'Invalid JSON body sent to /v1/video/animate.' }, 400); }
+    const rawBody = await r.text(); let body: any; try { body = JSON.parse(rawBody); } catch { return json(r, e, { ok: false, contract_version: '1.1', capability: 'video', status: 'invalid_input', request_id: id, error: 'Invalid JSON body sent to /v1/video/animate.' }, 400); }
     if (body?.contract_version !== '1.1' || body?.operation !== 'animate') return json(r, e, { ok: false, contract_version: '1.1', capability: 'video', status: 'contract_mismatch', request_id: id, error: 'BeatVision animation request did not use contract 1.1 animate.' }, 400);
-    const forwarded = new Request(r.url, { method: 'POST', headers: new Headers(r.headers), body: rawBody });
-    const pixazoResponse = await pixazo.fetch(forwarded, e);
-    if (pixazoResponse.status < 500) return pixazoResponse;
-    const image = firstImageDataUrl(body.payload || {});
-    if (!image) return pixazoResponse;
-    return animateStillWithShotstack(r, e, image, id);
+    const forwarded = new Request(r.url, { method: 'POST', headers: new Headers(r.headers), body: rawBody }); const pixazoResponse = await pixazo.fetch(forwarded, e); if (pixazoResponse.status < 500) return pixazoResponse; const image = firstImageDataUrl(body.payload || {}); if (!image) return pixazoResponse; return animateStillWithShotstack(r, e, image, id);
   }
   if (path === '/v1/image/world-assets' || path === '/v1/image/scenes' || path === '/v1/audio/generate') return pixazo.fetch(r, e);
   return pollinations.fetch(r, e);
