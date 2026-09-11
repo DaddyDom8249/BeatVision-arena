@@ -51,7 +51,12 @@ export async function animateStillWithShotstack(r: Request, e: any, image: strin
 }
 
 function clipLength(clip: any) { const n = Number(clip?.duration_seconds || clip?.length || 4); return Number.isFinite(n) && n > 0 ? Math.min(n, 60) : 4; }
-function extractMotionClips(payload: any) { const clips = payload?.motion?.clips || payload?.motion?.result?.clips || []; return Array.isArray(clips) ? clips.filter((x: any) => x?.video_url || x?.url) : []; }
+function extractMotionClips(payload: any) {
+  const candidates = payload?.motion?.clips || payload?.motion?.result?.clips;
+  if (Array.isArray(candidates)) return candidates.filter((x: any) => x?.video_url || x?.url);
+  const single = payload?.motion?.video_url || payload?.motion?.result?.video_url || payload?.motion?.url || payload?.motion?.result?.url;
+  return typeof single === 'string' && single ? [{ scene: 1, status: 'animated', video_url: single }] : [];
+}
 
 export default { async fetch(r: Request, e: any) {
   if (r.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(r, e) });
@@ -60,7 +65,7 @@ export default { async fetch(r: Request, e: any) {
   const key = e.SHOTSTACK_API_KEY; if (!key) return json(r, e, { ok: false, contract_version: '1.1', capability: 'video', provider: 'shotstack', status: 'provider_unavailable', request_id: id, error: 'Shotstack Sandbox is not configured. Configure SHOTSTACK_API_KEY as a Worker secret.' }, 503);
   let body: any; try { body = await r.json(); } catch { return json(r, e, { ok: false, error: 'Invalid JSON body', request_id: id }, 400); }
   if (body?.contract_version !== '1.1' || body?.operation !== 'assemble') return json(r, e, { ok: false, error: 'Expected BeatVision contract 1.1 assemble operation.', request_id: id }, 400);
-  const payload = body.payload || {}; const motionClips = extractMotionClips(payload); if (!motionClips.length) return json(r, e, { ok: false, contract_version: '1.1', capability: 'video', provider: 'shotstack', status: 'invalid_input', request_id: id, error: 'Assembly requires at least one generated motion clip.' }, 400);
+  const payload = body.payload || {}; const motionClips = extractMotionClips(payload); if (!motionClips.length) return json(r, e, { ok: false, contract_version: '1.1', capability: 'video', provider: 'shotstack', status: 'invalid_input', request_id: id, error: 'Assembly requires at least one generated motion clip. Provide motion.clips or motion.video_url.' }, 400);
   const started = Date.now();
   try {
     const resolved: Array<{ src: string; length: number; scene: number }> = [];
