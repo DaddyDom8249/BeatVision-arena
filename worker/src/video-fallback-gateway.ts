@@ -1,4 +1,5 @@
 import pixazo from './pixazo-media-gateway-fixed';
+import motionResilient from './pixazo-motion-resilience';
 import shotstack, { animateStillWithShotstack } from './shotstack-gateway';
 import pollinations from './pollinations-gateway-v2';
 
@@ -21,7 +22,12 @@ export default { async fetch(r: Request, e: any) {
     if (!auth(r, e)) return json(r, e, { ok: false, error: 'Unauthorized', request_id: id }, 401);
     const rawBody = await r.text(); let body: any; try { body = JSON.parse(rawBody); } catch { return json(r, e, { ok: false, contract_version: '1.1', capability: 'video', status: 'invalid_input', request_id: id, error: 'Invalid JSON body sent to /v1/video/animate.' }, 400); }
     if (body?.contract_version !== '1.1' || body?.operation !== 'animate') return json(r, e, { ok: false, contract_version: '1.1', capability: 'video', status: 'contract_mismatch', request_id: id, error: 'BeatVision animation request did not use contract 1.1 animate.' }, 400);
-    const forwarded = new Request(r.url, { method: 'POST', headers: new Headers(r.headers), body: rawBody }); const pixazoResponse = await pixazo.fetch(forwarded, e); if (pixazoResponse.status < 500) return pixazoResponse; const image = firstImageDataUrl(body.payload || {}); if (!image) return pixazoResponse; return animateStillWithShotstack(r, e, image, id);
+    const forwarded = new Request(r.url, { method: 'POST', headers: new Headers(r.headers), body: rawBody });
+    const pixazoResponse = await motionResilient.fetch(forwarded, e);
+    if (pixazoResponse.status < 500) return pixazoResponse;
+    const image = firstImageDataUrl(body.payload || {});
+    if (!image) return pixazoResponse;
+    return animateStillWithShotstack(r, e, image, id);
   }
   if (path === '/v1/image/world-assets' || path === '/v1/image/scenes' || path === '/v1/audio/generate') return pixazo.fetch(r, e);
   return pollinations.fetch(r, e);
