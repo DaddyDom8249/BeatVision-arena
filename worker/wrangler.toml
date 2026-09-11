@@ -12,6 +12,14 @@ PIXAZO_WORLD_IMAGE_MODEL = "flux-schnell"
 PIXAZO_SCENE_IMAGE_MODEL = "sdxl"
 PIXAZO_HERO_IMAGE_MODEL = "sdxl"
 
+[[durable_objects.bindings]]
+name = "ANIMATION_JOBS"
+class_name = "BeatVisionAnimationJob"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["BeatVisionAnimationJob"]
+
 # Free Pixazo models used by the active Arena creative path only:
 # Flux Schnell = fast world/character/environment concepts and scene fallback.
 # SDXL = world hero/keyframes and preferred scene imagery.
