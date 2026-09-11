@@ -29,12 +29,6 @@ const auth = (r: Request, e: any) =>
 const media = (d: any) =>
   d?.output?.media_url?.[0] || d?.output?.media_url || d?.output || d?.imageUrl || d?.image_url || d?.url || null;
 
-const image = (p: any) => {
-  const values = p?.images?.images || p?.images || [];
-  const first = Array.isArray(values) ? values[0] : values;
-  return first?.image_url || first?.url || first?.data_url || null;
-};
-
 const imageItems = (p: any) => {
   const values = p?.images?.images || p?.images || [];
   return Array.isArray(values) ? values.filter((item: any) => item?.image_url || item?.url || item?.data_url) : [];
@@ -136,6 +130,12 @@ async function labeled(label: string, work: () => Promise<string>) {
   catch (error) { throw new Error(`${label}: ${error instanceof Error ? error.message : String(error)}`); }
 }
 
+function shotDuration(scene: any) {
+  const requested = Number(scene?.duration_seconds);
+  if (!Number.isFinite(requested)) return 4;
+  return Math.max(2.5, Math.min(requested, 5.5));
+}
+
 async function animate(r: Request, e: any, key: string, payload: any, requestId: string) {
   const items = imageItems(payload);
   if (!items.length) return json(r, e, {
@@ -151,7 +151,7 @@ async function animate(r: Request, e: any, key: string, payload: any, requestId:
 
   const scenes = Array.isArray(payload?.storyboard?.scenes) ? payload.storyboard.scenes : [];
   const started = Date.now();
-  const clips: Array<{ scene: number; status: string; video_url: string; source: string; pixazo_request_id: string | null }> = [];
+  const clips: Array<{ scene: number; status: string; video_url: string; source: string; duration_seconds: number; pixazo_request_id: string | null }> = [];
 
   try {
     for (let i = 0; i < items.length; i += 1) {
@@ -159,6 +159,7 @@ async function animate(r: Request, e: any, key: string, payload: any, requestId:
       const raw = item?.image_url || item?.url || item?.data_url;
       const sceneNumber = Number(item?.scene || scenes[i]?.scene || i + 1);
       const scene = scenes.find((candidate: any) => Number(candidate?.scene) === sceneNumber) || scenes[i];
+      const durationSeconds = shotDuration(scene);
       const source = String(raw).startsWith('data:')
         ? await resolveShotstackSource(String(raw), e.SHOTSTACK_API_KEY || '', `beatvision-scene-${sceneNumber}.jpg`)
         : String(raw);
@@ -167,7 +168,7 @@ async function animate(r: Request, e: any, key: string, payload: any, requestId:
         prompt: clip(worldPrompt(payload, scene), 4000),
         image_url: source,
         aspect: '16:9',
-        num_frames: 121,
+        num_frames: Math.round(durationSeconds * 24) + 1,
         frame_rate: 24,
         steps: 8,
         cfg: 3
@@ -180,6 +181,7 @@ async function animate(r: Request, e: any, key: string, payload: any, requestId:
         status: 'animated',
         video_url: videoUrl,
         source: 'Pixazo free LTX image-to-video',
+        duration_seconds: durationSeconds,
         pixazo_request_id: data?.request_id || null
       });
     }
@@ -274,7 +276,7 @@ export default {
       }
 
       if (operation === 'sceneImages') {
-        const scenes = Array.isArray(payload?.storyboard?.scenes) ? payload.storyboard.scenes.slice(0, 8) : [];
+        const scenes = Array.isArray(payload?.storyboard?.scenes) ? payload.storyboard.scenes.slice(0, 24) : [];
         if (!scenes.length) return json(r, e, {
           ok: false,
           status: 'invalid_input',
