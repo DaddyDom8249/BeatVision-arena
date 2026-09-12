@@ -55,6 +55,24 @@ function clipLength(clip: any) { const n = Number(clip?.duration_seconds || clip
 function extractMotionClips(payload: any) { const candidates = payload?.motion?.clips || payload?.motion?.result?.clips; if (Array.isArray(candidates)) return candidates.filter((x: any) => x?.video_url || x?.url); const single = payload?.motion?.video_url || payload?.motion?.result?.video_url || payload?.motion?.url || payload?.motion?.result?.url; return typeof single === 'string' && single ? [{ scene: 1, status: 'animated', video_url: single }] : []; }
 function requestedDuration(payload: any, fallback: number) { const candidates = [payload?.audio?.duration_seconds, payload?.audio?.duration, payload?.analysis?.duration_seconds]; for (const value of candidates) { const n = Number(value); if (Number.isFinite(n) && n > 0) return Math.min(n, 3600); } return fallback; }
 
+// The first successful render repeated the same 16-scene order for every cycle.
+// Keep every generated clip, but deliberately vary the order of later cycles so
+// long songs do not become a visibly repeating 16-shot loop. The permutation is
+// deterministic, so identical inputs still produce reproducible edits.
+function rotate<T>(items: T[], offset: number) { if (!items.length) return []; const n = ((offset % items.length) + items.length) % items.length; return items.slice(n).concat(items.slice(0, n)); }
+function cycleOrder<T extends { scene: number }>(items: T[], cycle: number) {
+  const base = [...items].sort((a, b) => a.scene - b.scene);
+  if (base.length < 2) return base;
+  let ordered: T[];
+  switch (cycle % 4) {
+    case 0: ordered = base; break;
+    case 1: ordered = [...base].reverse(); break;
+    case 2: ordered = rotate(base, Math.floor(base.length / 2)); break;
+    default: ordered = base.filter((_, i) => i % 2 === 0).concat(base.filter((_, i) => i % 2 === 1)); break;
+  }
+  return ordered;
+}
+
 export default { async fetch(r: Request, e: any) {
   if (r.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(r, e) });
   const url = new URL(r.url); if (url.pathname !== '/v1/video/assemble') return json(r, e, { ok: false, error: 'Not found' }, 404);
@@ -68,11 +86,16 @@ export default { async fetch(r: Request, e: any) {
     const resolved: Array<{ src: string; length: number; scene: number }> = [];
     for (let i = 0; i < motionClips.length; i++) { const clip = motionClips[i]; const src = await resolveShotstackSource(clip.video_url || clip.url, key, `beatvision-motion-${i + 1}.mp4`); resolved.push({ src, length: clipLength(clip), scene: Number(clip.scene || i + 1) }); }
     const audioInput = payload.audio_base64 || payload.audio_data || null; const audioSrc = audioInput ? await resolveShotstackSource(audioInput, key, 'beatvision-song.mp3') : null; const rawVisualDuration = resolved.reduce((sum, x) => sum + x.length, 0); const targetDuration = requestedDuration(payload, rawVisualDuration);
-    const videoClips: any[] = []; let cursor = 0; let cycle = 0;
+    const videoClips: any[] = []; let cursor = 0; let cycle = 0; let previousScene: number | null = null;
     while (cursor < targetDuration - 0.001) {
-      const item = resolved[cycle % resolved.length]; const length = Math.min(item.length, targetDuration - cursor);
-      videoClips.push({ asset: { type: 'video', src: item.src, transcode: true }, start: cursor, length, fit: 'crop', effect: cycle % 2 === 0 ? 'zoomIn' : 'zoomOut', ...(cycle > 0 ? { transition: { in: 'fadeFast' } } : {}) });
-      cursor += length; cycle += 1; if (cycle > 10000) throw new Error('Assembly safety limit exceeded while extending visual coverage.');
+      let ordered = cycleOrder(resolved, cycle);
+      if (previousScene !== null && ordered.length > 1 && ordered[0].scene === previousScene) ordered = rotate(ordered, 1);
+      for (let index = 0; index < ordered.length && cursor < targetDuration - 0.001; index++) {
+        const item = ordered[index]; const length = Math.min(item.length, targetDuration - cursor); const globalIndex = videoClips.length;
+        videoClips.push({ asset: { type: 'video', src: item.src, transcode: true }, start: cursor, length, fit: 'crop', effect: globalIndex % 2 === 0 ? 'zoomIn' : 'zoomOut', ...(globalIndex > 0 ? { transition: { in: 'fadeFast' } } : {}) });
+        cursor += length; previousScene = item.scene;
+      }
+      cycle += 1; if (cycle > 10000) throw new Error('Assembly safety limit exceeded while extending visual coverage.');
     }
     const tracks: any[] = [{ clips: videoClips }];
     const timeline: any = { background: '#000000', tracks };
