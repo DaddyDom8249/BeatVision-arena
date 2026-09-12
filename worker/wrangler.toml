@@ -16,9 +16,17 @@ PIXAZO_HERO_IMAGE_MODEL = "sdxl"
 name = "ANIMATION_JOBS"
 class_name = "BeatVisionAnimationJob"
 
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["BeatVisionAnimationJob"]
+# Declarative Durable Object lifecycle.
+# BeatVisionAnimationJob is the live SQLite-backed class created by legacy v1.
+# BeatVisionPipelineJob was the rolled-back v2 pipeline class and is explicitly
+# retired here so the old migration history does not have to be replayed.
+[exports.BeatVisionAnimationJob]
+type = "durable-object"
+storage = "sqlite"
+
+[exports.BeatVisionPipelineJob]
+type = "durable-object"
+state = "deleted"
 
 # Free Pixazo models used by the active Arena creative path only:
 # Flux Schnell = fast world/character/environment concepts and scene fallback.
@@ -33,7 +41,7 @@ new_sqlite_classes = ["BeatVisionAnimationJob"]
 # Pollinations remains only for the already-proven Whisper audio analysis
 # and language/world-direction calls because Pixazo does not replace those
 # free capabilities in the current Arena architecture.
-# Shotstack Sandbox remains the deterministic editor/assembly layer.
+# Shotstack Sandbox remains the deterministic assembly layer.
 # Hugging Face is intentionally not used by the Arena video path.
 #
 # Secrets expected by the worker:
