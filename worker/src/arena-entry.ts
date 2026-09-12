@@ -106,14 +106,15 @@ async function resilientSceneImages(r: Request, e: any, body: any, requestId: st
   if (!key) return json(r, e, { ok: false, error: 'PIXAZO_API_KEY is not configured.', request_id: requestId }, 503);
   if (body?.contract_version !== CONTRACT) return json(r, e, { ok: false, error: 'Expected BeatVision contract 1.1.', request_id: requestId }, 400);
   const payload = body?.payload || {};
-  const scenes = Array.isArray(payload?.storyboard?.scenes) ? payload.storyboard.scenes.slice(0, 8) : [];
+  const scenes = Array.isArray(payload?.storyboard?.scenes) ? payload.storyboard.scenes : [];
   if (!scenes.length) return json(r, e, { ok: false, status: 'invalid_input', request_id: requestId, error: 'Storyboard contains no scenes.' }, 400);
+  if (scenes.length > 1) return json(r, e, { ok: false, status: 'invalid_input', request_id: requestId, error: 'Scene image gateway expects one visual beat per request. Batch the beats at the client/orchestration layer so failures remain isolated.' }, 400);
   const started = Date.now(); const images: any[] = []; const models = new Set<string>();
   try {
     for (let i = 0; i < scenes.length; i += 1) {
       const sceneNumber = Number(scenes[i]?.scene || i + 1);
       const generated = await generateSceneImage(key, scenePrompt(payload, scenes[i]), sceneNumber);
-      images.push({ scene: sceneNumber, status: 'generated', image_url: generated.image_url, model: generated.model });
+      images.push({ scene: sceneNumber, beatId: scenes[i]?.beatId || null, status: 'generated', image_url: generated.image_url, model: generated.model });
       models.add(generated.model);
     }
     return json(r, e, { ok: true, contract_version: CONTRACT, capability: 'image', provider: 'pixazo', model: Array.from(models).join('+'), request_id: requestId, latency_ms: Date.now() - started, result: { images, models_used: Array.from(models), scene_count: images.length, free_only: true } });
