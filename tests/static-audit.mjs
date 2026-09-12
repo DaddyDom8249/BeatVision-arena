@@ -38,9 +38,10 @@ if (!app.includes('executeSceneBatch')) throw new Error('Per-scene batching is m
 if (!app.includes('storyboard.scenes.slice(0,64)')) throw new Error('Expected only the browser safety ceiling, not a small fixed scene target.');
 if (!app.includes('delete single.images')) throw new Error('Scene-image request isolation is missing.');
 if (!app.includes('sceneNumber')) throw new Error('Scene identity matching is missing.');
+if (!app.includes('storyboard:state.storyboard,motion:state.motion')) throw new Error('Authoritative visual beat metadata is not passed into assembly.');
 
 const beatEngine = read('worker/src/visual-beat-engine.ts');
-for (const requiredToken of ['VisualBeat', 'compactAudio', 'visualBeatSystemPrompt', 'normalizeVisualBeats', 'coverage_ratio', 'semantic_grounding_failures', 'reusePolicy']) {
+for (const requiredToken of ['VisualBeat', 'compactAudio', 'visualBeatSystemPrompt', 'normalizeVisualBeats', 'coverage_ratio', 'semantic_grounding_failures', 'semantic_duplicate_rate', 'unexplained_reuse', 'reusePolicy']) {
   if (!beatEngine.includes(requiredToken)) throw new Error(`Visual beat engine missing ${requiredToken}.`);
 }
 if (!beatEngine.includes('lyricMeaning') || !beatEngine.includes('narrativePurpose') || !beatEngine.includes('characterState') || !beatEngine.includes('visualContinuityRequirements')) throw new Error('Visual beat metadata is incomplete.');
@@ -68,12 +69,11 @@ if (!shotstack.includes('requestedDuration') || !shotstack.includes('targetDurat
 if (!shotstack.includes('while (cursor < targetDuration')) throw new Error('Visual extension loop is missing.');
 if (!shotstack.includes('function cycleOrder')) throw new Error('Assembly ordering optimization is missing.');
 if (!shotstack.includes('previousScene')) throw new Error('Adjacent repeated-scene guard is missing.');
-if (!shotstack.includes('visual beat') && !shotstack.includes('visualBeat')) console.warn('Assembly file has no explicit visual-beat terminology; upstream beat identity remains authoritative.');
 
 const wrangler = read('worker/wrangler.toml');
 if (!wrangler.includes('main = "src/arena-entry.ts"')) throw new Error('Arena entry is not the deployed Worker entrypoint.');
 
 console.log('STATIC AUDIT PASS');
 console.log(`Checked ${required.length} source/config files.`);
-console.log('Visual planning: song-grounded dynamic beats with coverage and semantic-grounding gates.');
+console.log('Visual planning: song-grounded dynamic beats with coverage, semantic-grounding, duplicate, and reuse gates.');
 console.log('Assembly ordering remains an optimization only; it is not the source of new visual content.');
