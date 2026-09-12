@@ -88,6 +88,7 @@ export function visualBeatSystemPrompt() {
     'Return this exact top-level shape: {sections, visual_beats, coverage_notes}.',
     'Each visual beat must contain: beatId, startTime, endTime, sectionId, lyricRange, lyricMeaning, narrativePurpose, emotionalState, emotionalIntensity, characterState, environment, action, visualConcept, symbolicElements, cameraIntent, transitionIntent, worldConstraints, previousBeat, nextBeat, visualContinuityRequirements, reusePolicy, description, visual_direction, location, emotion, continuity_notes, duration_seconds.',
     'Use numeric startTime/endTime in seconds. emotionalIntensity is 0..1. symbolicElements and worldConstraints and visualContinuityRequirements are arrays of strings.',
+    'Set reusePolicy to new_visual_event for normal beats. Use intentional_motif_return only when the beat deliberately revisits an earlier visual event for narrative reasons.',
     'coverage_notes must identify unresolved story gaps instead of silently filling them with reused material.'
   ].join(' ');
 }
@@ -118,7 +119,7 @@ function normalizeBeat(raw: any, index: number, previous: any, next: any): Visua
     previousBeat: text(raw?.previousBeat ?? raw?.previous_beat) || (previous ? text(previous.beatId) : null),
     nextBeat: text(raw?.nextBeat ?? raw?.next_beat) || (next ? text(next.beatId) : null),
     visualContinuityRequirements: Array.isArray(raw?.visualContinuityRequirements) ? raw.visualContinuityRequirements.map(text).filter(Boolean) : (Array.isArray(raw?.visual_continuity_requirements) ? raw.visual_continuity_requirements.map(text).filter(Boolean) : []),
-    reusePolicy: text(raw?.reusePolicy ?? raw?.reuse_policy, 'new_visual_event unless intentional motif return is explicitly justified'),
+    reusePolicy: text(raw?.reusePolicy ?? raw?.reuse_policy, 'new_visual_event'),
     description: text(raw?.description ?? raw?.visualConcept ?? raw?.visual_concept),
     visual_direction: text(raw?.visual_direction ?? raw?.visualDirection ?? raw?.visualConcept),
     location: text(raw?.location ?? raw?.environment),
@@ -167,7 +168,7 @@ export function normalizeVisualBeats(raw: any, durationSeconds: number) {
     for (let j = 0; j < i; j += 1) {
       const score = similarity(fingerprints[i], fingerprints[j]);
       if (score >= 0.78) {
-        const intentional = /intentional|motif|return|recurring|reuse/i.test(normalized[i].reusePolicy);
+        const intentional = /intentional_motif_return|approved_reuse|recurring_motif/i.test(normalized[i].reusePolicy);
         semanticDuplicates.push({ beatId: normalized[i].beatId, duplicateOf: normalized[j].beatId, similarity: Number(score.toFixed(3)), intentional });
         break;
       }
