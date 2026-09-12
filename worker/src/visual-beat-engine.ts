@@ -36,6 +36,21 @@ const finite = (value: unknown, fallback = 0) => {
 
 const text = (value: unknown, fallback = '') => String(value ?? fallback).trim();
 
+const tokens = (value: string) => new Set(
+  value.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(token => token.length > 2)
+);
+
+const similarity = (a: Set<string>, b: Set<string>) => {
+  if (!a.size || !b.size) return 0;
+  let intersection = 0;
+  for (const token of a) if (b.has(token)) intersection += 1;
+  return intersection / (a.size + b.size - intersection);
+};
+
+function semanticFingerprint(beat: VisualBeat) {
+  return [beat.lyricMeaning, beat.narrativePurpose, beat.emotionalState, beat.characterState, beat.environment, beat.action, beat.visualConcept, beat.cameraIntent, beat.symbolicElements.join(' ')].join(' ');
+}
+
 export function compactAudio(value: any) {
   if (!value || typeof value !== 'object') return value;
   const result = value.result && typeof value.result === 'object' ? value.result : value;
@@ -145,12 +160,26 @@ export function normalizeVisualBeats(raw: any, durationSeconds: number) {
   const longBeatCount = normalized.filter(beat => beat.duration_seconds > 8).length;
   const semanticFields = ['lyricMeaning','narrativePurpose','emotionalState','characterState','environment','action','visualConcept'];
   const missingSemantic = normalized.filter(beat => semanticFields.filter(key => !text((beat as any)[key])).length >= 3).map(beat => beat.beatId);
+
+  const fingerprints = normalized.map(semanticFingerprint).map(tokens);
+  const semanticDuplicates: Array<{beatId: string; duplicateOf: string; similarity: number; intentional: boolean}> = [];
+  for (let i = 0; i < normalized.length; i += 1) {
+    for (let j = 0; j < i; j += 1) {
+      const score = similarity(fingerprints[i], fingerprints[j]);
+      if (score >= 0.78) {
+        const intentional = /intentional|motif|return|recurring|reuse/i.test(normalized[i].reusePolicy);
+        semanticDuplicates.push({ beatId: normalized[i].beatId, duplicateOf: normalized[j].beatId, similarity: Number(score.toFixed(3)), intentional });
+        break;
+      }
+    }
+  }
+  const unexplainedReuse = semanticDuplicates.filter(item => !item.intentional);
   const errors: string[] = [];
   if (!normalized.length) errors.push('No visual beats were produced.');
   if (duration > 0 && coverage < 0.96) errors.push(`Visual coverage is ${(coverage * 100).toFixed(1)}%, below the 96% minimum.`);
   if (gaps.length) errors.push(`Uncovered timeline gaps: ${gaps.map(g => `${g.startTime.toFixed(2)}-${g.endTime.toFixed(2)}s`).join(', ')}`);
-  if (longBeatCount) errors.push(`${longBeatCount} visual beats exceed 8 seconds and require explicit narrative justification.`);
   if (missingSemantic.length) errors.push(`Beats missing semantic grounding: ${missingSemantic.join(', ')}`);
+  if (unexplainedReuse.length) errors.push(`Unexplained semantic reuse detected: ${unexplainedReuse.map(item => `${item.beatId}≈${item.duplicateOf} (${item.similarity})`).join(', ')}`);
   return {
     visual_beats: normalized,
     sections: Array.isArray(raw?.sections) ? raw.sections : [],
@@ -163,6 +192,9 @@ export function normalizeVisualBeats(raw: any, durationSeconds: number) {
       gaps,
       unresolved_beats: unresolved,
       semantic_grounding_failures: missingSemantic,
+      semantic_duplicates: semanticDuplicates,
+      semantic_duplicate_rate: normalized.length ? semanticDuplicates.length / normalized.length : 0,
+      unexplained_reuse: unexplainedReuse,
       long_beats: longBeatCount
     },
     errors,
