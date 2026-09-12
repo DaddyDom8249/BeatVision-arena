@@ -3,8 +3,10 @@ const PIXAZO_STATUS=`${PIXAZO_BASE}/v2/requests/status/`;
 const SHOTSTACK_BASE='https://api.shotstack.io';
 const POLL_MS=7000;
 const MAX_RETRIES=3;
+const SUBMIT_TIMEOUT_MS=45000;
+const STATUS_TIMEOUT_MS=20000;
 const media=(d:any)=>d?.output?.media_url?.[0]||d?.output?.media_url||d?.output||d?.url||null;
-const retryable=(s:string)=>/prompt not found|provider ended this request|job ERROR|502|503|504|temporarily unavailable|rate limit|too many requests|timed out|request was rejected/i.test(s);
+const retryable=(s:string)=>/prompt not found|provider ended this request|job ERROR|502|503|504|temporarily unavailable|rate limit|too many requests|timed out|timeout|request was rejected|aborted/i.test(s);
 
 export class BeatVisionAnimationJob {
   state: DurableObjectState; env:any;
@@ -13,12 +15,22 @@ export class BeatVisionAnimationJob {
   async save(job:any){await this.state.storage.put('job',job);}
   async alarm(){await this.tick();}
 
+  async fetchWithTimeout(input:RequestInfo|URL,init:RequestInit={},timeoutMs=30000){
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),timeoutMs);
+    try{return await fetch(input,{...init,signal:controller.signal});}
+    catch(error){
+      if(error instanceof Error&&error.name==='AbortError')throw new Error(`Provider request timed out after ${timeoutMs}ms.`);
+      throw error;
+    }finally{clearTimeout(timer);}
+  }
+
   async shotstack(path:string,init:RequestInit={}){
     const key=this.env.SHOTSTACK_API_KEY;
     if(!key) throw new Error('Shotstack fallback is not configured.');
     const headers=new Headers(init.headers||{});
     headers.set('x-api-key',key); headers.set('Accept','application/json');
-    const response=await fetch(`${SHOTSTACK_BASE}${path}`,{...init,headers});
+    const response=await this.fetchWithTimeout(`${SHOTSTACK_BASE}${path}`,{...init,headers},STATUS_TIMEOUT_MS);
     const text=await response.text(); let data:any;
     try{data=JSON.parse(text)}catch{data={raw:text}};
     if(!response.ok)throw new Error(`Shotstack ${response.status}: ${String(data?.response?.error||data?.message||data?.error||text).slice(0,1600)}`);
@@ -88,13 +100,13 @@ export class BeatVisionAnimationJob {
       const duration=Math.max(2.5,Math.min(Number(scene?.duration_seconds)||4,5.5));
       if(!source){job.failed.push({scene:Number(scene?.scene||job.index+1),status:'missing_image',error:'No source image.'});job.index++;job.retries=0;job.status='running';await this.save(job);await this.state.storage.setAlarm(Date.now());return;}
       if(!job.active_request_id){
-        const response=await fetch(`${PIXAZO_BASE}/ltx-video/v1/image-to-video`,{method:'POST',headers:{'Content-Type':'application/json','Cache-Control':'no-cache','Ocp-Apim-Subscription-Key':this.env.PIXAZO_API_KEY},body:JSON.stringify({prompt:this.prompt(scene),image_url:source,aspect:'16:9',num_frames:Math.round(duration*24)+1,frame_rate:24,steps:8,cfg:3})});
+        const response=await this.fetchWithTimeout(`${PIXAZO_BASE}/ltx-video/v1/image-to-video`,{method:'POST',headers:{'Content-Type':'application/json','Cache-Control':'no-cache','Ocp-Apim-Subscription-Key':this.env.PIXAZO_API_KEY},body:JSON.stringify({prompt:this.prompt(scene),image_url:source,aspect:'16:9',num_frames:Math.round(duration*24)+1,frame_rate:24,steps:8,cfg:3})},SUBMIT_TIMEOUT_MS);
         const text=await response.text();let data:any;try{data=JSON.parse(text)}catch{data={raw:text}};
         if(!response.ok)throw new Error(`Pixazo ltx-video ${response.status}: ${String(data?.message||data?.error||text).slice(0,1600)}`);
         if(!data?.request_id){const url=media(data);if(!url)throw new Error('Pixazo LTX returned no request_id or video URL.');job.clips.push({scene:Number(scene?.scene||job.index+1),status:'animated',video_url:url,source:'Pixazo free LTX image-to-video',duration_seconds:duration,pixazo_request_id:null});job.index++;job.retries=0;job.fallback_attempted=false;job.status='running';await this.save(job);await this.state.storage.setAlarm(Date.now());return;}
         job.active_request_id=data.request_id;job.active_scene=Number(scene?.scene||job.index+1);job.active_duration=duration;job.active_started_at=Date.now();job.retries=0;job.status='running';await this.save(job);await this.state.storage.setAlarm(Date.now()+POLL_MS);return;
       }
-      const response=await fetch(`${PIXAZO_STATUS}${encodeURIComponent(job.active_request_id)}`,{headers:{'Ocp-Apim-Subscription-Key':this.env.PIXAZO_API_KEY,'Cache-Control':'no-cache'}});
+      const response=await this.fetchWithTimeout(`${PIXAZO_STATUS}${encodeURIComponent(job.active_request_id)}`,{headers:{'Ocp-Apim-Subscription-Key':this.env.PIXAZO_API_KEY,'Cache-Control':'no-cache'}},STATUS_TIMEOUT_MS);
       const text=await response.text();let data:any;try{data=JSON.parse(text)}catch{data={}};
       if(!response.ok)throw new Error(`Pixazo ltx-video status ${response.status}: ${text.slice(0,1200)}`);
       const status=String(data?.status||'').toUpperCase();
