@@ -51,6 +51,8 @@ export function visualBeatSystemPrompt(){return [
   'Build a complete song-grounded visual narrative, not a generic style montage.',
   'Use timestamped lyric segments and supplied section/energy information when available.',
   'Instrumental or non-lyrical intervals are valid visual beats. Do not leave them uncovered. Use the preceding and following narrative meaning plus pacing to create a transition, action, environment change, reaction, symbolic event, or consequence that is visually meaningful without inventing lyrics.',
+  'The complete timeline from 0 through duration must be covered by intentional beats. Short silence at the beginning/end and long instrumental gaps are still part of the song experience and require visual direction.',
+  'For long instrumental intervals, create multiple sequential visual beats when the interval contains enough time for meaningful progression. Do not make one static filler beat just to satisfy coverage.',
   'Repeated lyrics may return with different narrative purpose, emotional state, character state, action, composition, symbolism, or consequence.',
   'Do not treat a reordered copy of an earlier shot as a new visual beat.',
   'Every visual beat must explain why it exists and how it follows the previous beat.',
@@ -88,13 +90,75 @@ function timelineGaps(beats:VisualBeat[],duration:number){
   if(duration>cursor+.25)gaps.push({startTime:cursor,endTime:duration});return gaps;
 }
 
+function makeInstrumentalBeat(start:number,end:number,index:number,previous:VisualBeat|null,next:VisualBeat|null):VisualBeat{
+  const duration=end-start;
+  const phase=index%3;
+  const phaseNames=['transition','escalation','consequence'];
+  const phaseActions=[
+    'Carry the previous emotional state into a deliberate visual transition; the character moves through the environment while the world subtly changes.',
+    'Increase the internal pressure through a distinct physical action or environmental shift, moving the character toward the next lyrical event.',
+    'Let the emotional consequence settle into a new visual state that prepares the next lyrical event without inventing dialogue or lyrics.'
+  ];
+  const previousConcept=previous?.visualConcept||previous?.action||'the preceding visual state';
+  const nextConcept=next?.visualConcept||next?.action||'the following visual state';
+  const emotion=previous?.emotionalState||next?.emotionalState||'unresolved tension';
+  const intensity=previous&&next?Number(((previous.emotionalIntensity+next.emotionalIntensity)/2).toFixed(2)):previous?.emotionalIntensity??next?.emotionalIntensity??.5;
+  return {
+    beatId:`instrumental-${String(index+1).padStart(2,'0')}-${phaseNames[phase]}`,
+    scene:index+1,startTime:start,endTime:end,sectionId:`instrumental-${String(index+1).padStart(2,'0')}`,
+    lyricRange:'instrumental / non-lyrical interval',
+    lyricMeaning:`No lyric event in this interval. Visual transition from ${previousConcept} toward ${nextConcept}.`,
+    narrativePurpose:`Bridge the song's emotional and narrative progression during an instrumental interval; this is a deliberate ${phaseNames[phase]} beat rather than filler.`,
+    emotionalState:emotion,emotionalIntensity:intensity,
+    characterState:previous?.characterState||next?.characterState||'continuing the established character state',
+    environment:previous?.environment||next?.environment||'established world environment',
+    action:phaseActions[phase],
+    visualConcept:`Distinct instrumental ${phaseNames[phase]} beat connecting ${previousConcept} to ${nextConcept}.`,
+    symbolicElements:[`instrumental-${phaseNames[phase]}`,`bridge-to-${next?.beatId||'next-event'}`],
+    cameraIntent:phase===0?'Follow the transition with a slow directional move and clear spatial change.':phase===1?'Increase visual pressure with a tighter composition or more active camera movement.':'Settle into a consequential composition that visually points toward the next event.',
+    transitionIntent:`Transition from ${previous?.beatId||'song-opening'} into ${next?.beatId||'song-continuation'} without repeating the previous image.`,
+    worldConstraints:[...(previous?.worldConstraints||[]),...(next?.worldConstraints||[])],
+    previousBeat:previous?.beatId||null,nextBeat:next?.beatId||null,
+    visualContinuityRequirements:[...(previous?.visualContinuityRequirements||[]),...(next?.visualContinuityRequirements||[])],
+    reusePolicy:'new_visual_event',
+    description:`Instrumental ${phaseNames[phase]} visual event spanning ${duration.toFixed(2)} seconds.`,
+    visual_direction:`Create a unique, renderable ${phaseNames[phase]} image that visibly progresses the established story between adjacent beats.`,
+    location:previous?.location||next?.location||'established world location',emotion,continuity_notes:`Must bridge ${previous?.beatId||'opening'} to ${next?.beatId||'ending'} and must not be a reordered duplicate of either.`,
+    duration_seconds:Math.max(.1,duration)
+  };
+}
+
+function fillTimelineGaps(beats:VisualBeat[],duration:number){
+  const sorted=[...beats].sort((a,b)=>a.startTime-b.startTime);const result:VisualBeat[]=[];let cursor=0;let gapIndex=0;
+  for(let i=0;i<sorted.length;i++){
+    const current=sorted[i];
+    if(current.startTime>cursor+.25){
+      const gapStart=cursor;const gapEnd=current.startTime;let t=gapStart;let chunk=0;
+      while(t<gapEnd-.01){
+        const e=Math.min(gapEnd,t+8);
+        const prev=result.length?result[result.length-1]:null;
+        const gapBeat=makeInstrumentalBeat(t,e,gapIndex*10+chunk,prev,current);
+        result.push(gapBeat);t=e;chunk++;
+      }
+      gapIndex++;
+    }
+    result.push(current);cursor=Math.max(cursor,current.endTime);
+  }
+  if(duration>cursor+.25){
+    let t=cursor;let chunk=0;
+    while(t<duration-.01){const e=Math.min(duration,t+8);const prev=result.length?result[result.length-1]:null;result.push(makeInstrumentalBeat(t,e,gapIndex*10+chunk,prev,null));t=e;chunk++}
+  }
+  return result.sort((a,b)=>a.startTime-b.startTime);
+}
+
 export function normalizeVisualBeats(raw:any,durationSeconds:number){
   const source=Array.isArray(raw?.visual_beats)?raw.visual_beats:Array.isArray(raw?.scenes)?raw.scenes:[];
   const ordered=source.map((beat:any,index:number)=>({beat,index})).sort((a:any,b:any)=>finite(a.beat?.startTime??a.beat?.start_time,Infinity)-finite(b.beat?.startTime??b.beat?.start_time,Infinity)||a.index-b.index);
-  const normalized:VisualBeat[]=[];
+  let normalized:VisualBeat[]=[];
   for(let i=0;i<ordered.length;i++){const beat=normalizeBeat(ordered[i].beat,i,normalized[i-1]||null,ordered[i+1]?.beat||null);if(beat)normalized.push(beat)}
-  normalized.forEach((b,i)=>{b.scene=i+1;b.beatId=b.beatId||`beat-${String(i+1).padStart(2,'0')}`;b.previousBeat=i?normalized[i-1].beatId:null;b.nextBeat=i+1<normalized.length?normalized[i+1].beatId:null});
   const duration=Math.max(0,finite(durationSeconds));
+  normalized=fillTimelineGaps(normalized,duration);
+  normalized.forEach((b,i)=>{b.scene=i+1;b.beatId=b.beatId||`beat-${String(i+1).padStart(2,'0')}`;b.previousBeat=i?normalized[i-1].beatId:null;b.nextBeat=i+1<normalized.length?normalized[i+1].beatId:null});
   const coveredSeconds=mergeIntervals(normalized);const gaps=timelineGaps(normalized,duration);const coverage=duration?Math.min(1,coveredSeconds/duration):1;
   const unresolved=Array.isArray(raw?.coverage_notes?.unresolved_beats)?raw.coverage_notes.unresolved_beats:[];
   const semanticFields=['lyricMeaning','narrativePurpose','emotionalState','characterState','environment','action','visualConcept'];
@@ -102,7 +166,7 @@ export function normalizeVisualBeats(raw:any,durationSeconds:number){
   const fingerprints=normalized.map(semanticFingerprint).map(tokens);const semanticDuplicates:any[]=[];
   for(let i=0;i<normalized.length;i++)for(let j=0;j<i;j++){const score=similarity(fingerprints[i],fingerprints[j]);if(score>=.78){const intentional=/intentional_motif_return|approved_reuse|recurring_motif/i.test(normalized[i].reusePolicy);semanticDuplicates.push({beatId:normalized[i].beatId,duplicateOf:normalized[j].beatId,similarity:Number(score.toFixed(3)),intentional});break}}
   const unexplainedReuse=semanticDuplicates.filter(x=>!x.intentional);const overlaps=[];
-  for(let i=1;i<ordered.length;i++){const a=normalized[i-1],b=normalized[i];if(a&&b&&b.startTime<a.endTime-.25)overlaps.push({beatId:b.beatId,overlaps:a.beatId,seconds:Number((a.endTime-b.startTime).toFixed(3))})}
+  for(let i=1;i<normalized.length;i++){const a=normalized[i-1],b=normalized[i];if(b.startTime<a.endTime-.25)overlaps.push({beatId:b.beatId,overlaps:a.beatId,seconds:Number((a.endTime-b.startTime).toFixed(3))})}
   const errors:string[]=[];
   if(!normalized.length)errors.push('No visual beats were produced.');
   if(duration&&coverage<.96)errors.push(`Visual coverage is ${(coverage*100).toFixed(1)}%, below the 96% minimum.`);
