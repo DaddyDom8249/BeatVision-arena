@@ -3,6 +3,7 @@ const PIXAZO_STATUS=`${PIXAZO_BASE}/v2/requests/status/`;
 const SHOTSTACK_BASE='https://api.shotstack.io';
 const POLL_MS=7000;
 const MAX_RETRIES=3;
+const MAX_SCENES=64;
 const SUBMIT_TIMEOUT_MS=45000;
 const STATUS_TIMEOUT_MS=20000;
 const media=(d:any)=>d?.output?.media_url?.[0]||d?.output?.media_url||d?.output||d?.url||null;
@@ -138,10 +139,10 @@ export class BeatVisionAnimationJob {
     if(req.method==='GET')return Response.json(await this.load()||{status:'not_found'});
     if(req.method!=='POST')return new Response('Method Not Allowed',{status:405});
     const body:any=await req.json();const existing=await this.load();if(existing)return Response.json(existing);
-    const scenes=Array.isArray(body?.storyboard?.scenes)?body.storyboard.scenes.slice(0,24):[];const images=Array.isArray(body?.images?.images)?body.images.images:[];
+    const scenes=Array.isArray(body?.storyboard?.scenes)?body.storyboard.scenes.slice(0,MAX_SCENES):[];const images=Array.isArray(body?.images?.images)?body.images.images:[];
     if(!scenes.length||!images.length)return Response.json({ok:false,error:'Animation job requires storyboard scenes and generated images.'},{status:400});
     const job={job_id:body.job_id,status:'queued',created_at:new Date().toISOString(),index:0,scenes,images,clips:[],failed:[],retries:0,active_request_id:null,active_scene:null,active_duration:null,active_started_at:null,fallback_attempted:false,fallback_render_id:null,fallback_scene:null,fallback_duration:null,events:[],last_event:null,last_event_at:null};
-    await this.event(job,'job_created',{total_scenes:scenes.length,total_images:images.length,max_retries:MAX_RETRIES,submit_timeout_ms:SUBMIT_TIMEOUT_MS,status_timeout_ms:STATUS_TIMEOUT_MS,poll_interval_ms:POLL_MS});
+    await this.event(job,'job_created',{total_scenes:scenes.length,total_images:images.length,max_scenes:MAX_SCENES,max_retries:MAX_RETRIES,submit_timeout_ms:SUBMIT_TIMEOUT_MS,status_timeout_ms:STATUS_TIMEOUT_MS,poll_interval_ms:POLL_MS});
     await this.save(job);await this.state.storage.setAlarm(Date.now());return Response.json(job,{status:202});
   }
 }
