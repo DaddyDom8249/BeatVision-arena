@@ -1,1 +1,1 @@
-export { default } from './video-fallback-gateway';
+export { default } from './visual-diversity-gateway';
