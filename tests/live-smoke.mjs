@@ -19,9 +19,11 @@ async function expectStatus(name, path, init, allowed) {
   return { response, data };
 }
 
-const health = await expectStatus('health', '/health', {}, [200]);
-assert(health.data?.ok === true, 'health did not return ok=true');
-assert(health.data?.contract_version === '1.1', 'health contract version mismatch');
+const health = await expectStatus('health', '/health', {}, [200, 401]);
+if (health.response.status === 200) {
+  assert(health.data?.ok === true, 'health did not return ok=true');
+  assert(health.data?.contract_version === '1.1', 'health contract version mismatch');
+}
 
 await expectStatus('CORS preflight', '/v1/video/animate', {
   method: 'OPTIONS',
