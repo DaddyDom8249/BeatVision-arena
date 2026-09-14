@@ -19,11 +19,9 @@ async function expectStatus(name, path, init, allowed) {
   return { response, data };
 }
 
-const health = await expectStatus('health', '/health', {}, [200, 401]);
-if (health.response.status === 200) {
-  assert(health.data?.ok === true, 'health did not return ok=true');
-  assert(health.data?.contract_version === '1.1', 'health contract version mismatch');
-}
+const health = await expectStatus('health', '/health', {}, [200]);
+assert(health.data?.ok === true, 'health did not return ok=true');
+assert(health.data?.contract_version === '1.1', 'health contract version mismatch');
 
 await expectStatus('CORS preflight', '/v1/video/animate', {
   method: 'OPTIONS',
@@ -35,9 +33,16 @@ if (caps.response.status === 200) {
   assert(caps.data?.capabilities?.image?.provider === 'pixazo', 'image provider is not Pixazo');
   assert(caps.data?.capabilities?.video?.model === 'ltx-video', 'video model is not LTX');
   assert(caps.data?.capabilities?.assembly?.provider === 'shotstack-sandbox', 'assembly provider is not Shotstack Sandbox');
+  assert(caps.data?.capabilities?.persistent_animation?.provider === 'cloudflare-durable-object', 'persistent animation provider is not Cloudflare Durable Object');
 }
 
 await expectStatus('animate invalid JSON', '/v1/video/animate', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: '{broken-json'
+}, [400, 401]);
+
+await expectStatus('persistent animation invalid JSON', '/v1/video/animate/jobs/live-smoke-invalid', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: '{broken-json'
