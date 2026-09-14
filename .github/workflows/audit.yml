@@ -30,6 +30,7 @@ jobs:
           node --check log-guard.js
           node --check motion-bridge.js
           node --check tests/static-audit.mjs
+          node --check tests/render-integrity.mjs
           node --check tests/live-smoke.mjs
 
       - name: Worker bundle/type-surface checks
@@ -39,6 +40,9 @@ jobs:
 
       - name: Static architecture audit
         run: node tests/static-audit.mjs
+
+      - name: Render integrity adversarial tests
+        run: node tests/render-integrity.mjs
 
       - name: Live gateway failure-path smoke tests
         run: node tests/live-smoke.mjs
