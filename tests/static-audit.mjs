@@ -26,10 +26,10 @@ if(!language.includes("import { compactAudio, normalizeVisualBeats, toStoryboard
 if(!language.includes('visual_coverage_insufficient'))throw new Error('Storyboard coverage quality gate is missing.');
 if(!language.includes('BeatVision quality gate'))throw new Error('Storyboard failure must explain why reuse cannot silently fill gaps.');
 const arena=read('worker/src/arena-entry.ts');
-if(!arena.includes('const scenes = Array.isArray(payload?.storyboard?.scenes) ? payload.storyboard.scenes : [];'))throw new Error('Worker still has a fixed scene-count truncation.');
+if(!/const\s+scenes\s*=\s*Array\.isArray\(payload\?\.storyboard\?\.scenes\)\s*\?\s*payload\.storyboard\.scenes\s*:\s*\[\]\s*;/.test(arena))throw new Error('Worker still has a fixed scene-count truncation.');
 if(!arena.includes('Scene image gateway expects one visual beat per request'))throw new Error('Scene generation must remain isolated per visual beat.');
 if(!arena.includes('beatId'))throw new Error('Generated images must retain visual beat identity.');
-if(!arena.includes('for (let attempt = 1; attempt <= 3; attempt += 1)'))throw new Error('SDXL retry guard is missing.');
+if(!arena.includes('for(let attempt=1;attempt<=3;attempt+=1)')&&!arena.includes('for (let attempt = 1; attempt <= 3; attempt += 1)'))throw new Error('SDXL retry guard is missing.');
 const pixazo=read('worker/src/pixazo-media-gateway-fixed.ts');
 if(!pixazo.includes('/ltx-video/v1/image-to-video'))throw new Error('LTX image-to-video route is missing.');
 if(!pixazo.includes('LTX_TIMEOUT_MS = 300000')||!pixazo.includes('LTX_POLL_INTERVAL_MS = 7000'))throw new Error('LTX polling deadline/interval guard is missing.');
@@ -44,6 +44,8 @@ for(const token of ['probeVideo','/v1/probe/','buildCoverageManifest','assertSuf
 if(shotstack.includes('function cycleOrder'))throw new Error('Forbidden clip recycling function cycleOrder remains in active assembly.');
 if(shotstack.includes('while (cursor < targetDuration'))throw new Error('Forbidden assembly extension loop remains; assembly must consume each validated asset at most once.');
 if(shotstack.includes('previousScene'))throw new Error('Old adjacent-scene-only reuse guard remains; it is insufficient and must not be used as the assembly invariant.');
+const fallback=read('worker/src/video-fallback-gateway.ts');
+for(const token of ['approval_status','generation_type:\'GENERATIVE_VIDEO\'','asset_id'])if(!fallback.includes(token))throw new Error(`Motion output identity contract missing ${token}.`);
 const wrangler=read('worker/wrangler.toml');
 if(!wrangler.includes('main = "src/arena-entry.ts"'))throw new Error('Arena entry is not the deployed Worker entrypoint.');
 console.log('STATIC AUDIT PASS');
