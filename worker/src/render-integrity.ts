@@ -7,6 +7,8 @@ export type ValidatedMotionClip = {
   generation_type: GenerationType;
   actual_duration_seconds: number;
   requested_duration_seconds?: number;
+  timeline_start_seconds?: number;
+  timeline_end_seconds?: number;
   provider?: string;
   model?: string;
 };
@@ -65,13 +67,22 @@ export function buildCoverageManifest(clips: ValidatedMotionClip[], targetDurati
     if (seenScenes.has(scene)) throw new Error(`MEDIA_INTEGRITY_DUPLICATE_SCENE:${scene}`);
     if (seenAssets.has(assetId)) throw new Error(`MEDIA_INTEGRITY_DUPLICATE_ASSET:${assetId}`);
     if (seenSources.has(sourceUrl)) throw new Error(`MEDIA_INTEGRITY_DUPLICATE_SOURCE:${scene}`);
+    if (clip.timeline_start_seconds !== undefined || clip.timeline_end_seconds !== undefined) {
+      const start = Number(clip.timeline_start_seconds), end = Number(clip.timeline_end_seconds);
+      if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) throw new Error(`MEDIA_INTEGRITY_INVALID_TIMELINE:${scene}`);
+      if (end > target + COVERAGE_EPSILON_SECONDS) throw new Error(`MEDIA_INTEGRITY_TIMELINE_OUTSIDE_TARGET:${scene}`);
+      if (duration + COVERAGE_EPSILON_SECONDS < end - start) throw new Error(`MEDIA_INTEGRITY_CLIP_TOO_SHORT_FOR_TIMELINE:${scene}`);
+    }
     seenScenes.add(scene);
     seenAssets.add(assetId);
     seenSources.add(sourceUrl);
     accepted.push(clip);
   }
 
-  const uniqueDuration = accepted.reduce((sum, clip) => sum + Math.max(0, Math.min(Number(clip.actual_duration_seconds), 60)), 0);
+  const uniqueDuration = accepted.reduce((sum, clip) => {
+    const allocated = Number(clip.timeline_end_seconds) - Number(clip.timeline_start_seconds);
+    return sum + (Number.isFinite(allocated) && allocated > 0 ? allocated : Math.max(0, Math.min(Number(clip.actual_duration_seconds), 60)));
+  }, 0);
   const ratio = target > 0 ? uniqueDuration / target : 1;
   return {
     target_duration_seconds: target,
