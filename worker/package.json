@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:storyboard": "node --experimental-strip-types --test src/storyboard-validator.test.ts"
+    "test:storyboard": "node --experimental-strip-types --test src/storyboard-validator.test.ts",
+    "test:skills": "node --experimental-strip-types --test src/skills.test.ts",
+    "test": "npm run test:storyboard && npm run test:skills"
   }
 }
