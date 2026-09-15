@@ -1,4 +1,6 @@
 import arena from './arena-entry';
+import { BeatVisionAnimationJob } from './animation-jobs';
+export { BeatVisionAnimationJob } from './animation-jobs';
 import { validateStoryboard } from './storyboard-validator';
 import { timelineGuardian, validateMediaRecord } from './skills';
 
