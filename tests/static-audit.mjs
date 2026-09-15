@@ -2,9 +2,9 @@ import fs from 'node:fs';
 
 const required=[
   'app.js','provider-contracts.js','log-guard.js','motion-bridge.js','animation-bridge.js','worker/wrangler.toml',
-  'worker/src/arena-entry.ts','worker/src/visual-beat-engine.ts','worker/src/pixazo-media-gateway-fixed.ts',
+  'worker/src/arena-entry.ts','worker/src/arena-validated-entry.ts','worker/src/visual-beat-engine.ts','worker/src/pixazo-media-gateway-fixed.ts',
   'worker/src/pollinations-gateway-v2.ts','worker/src/shotstack-gateway.ts','worker/src/video-fallback-gateway.ts',
-  'worker/src/animation-jobs.ts','worker/src/render-integrity.ts','worker/src/skills.ts','worker/src/index.ts'
+  'worker/src/animation-jobs.ts','worker/src/render-integrity.ts','worker/src/skills.ts','worker/src/index.ts','worker/src/storyboard-validator.ts'
 ];
 for(const file of required)if(!fs.existsSync(file))throw new Error(`Missing required file: ${file}`);
 const read=file=>fs.readFileSync(file,'utf8');
@@ -37,7 +37,7 @@ if(!pixazo.includes('LTX_TIMEOUT_MS = 300000')||!pixazo.includes('LTX_POLL_INTER
 const ltxPolls=Math.floor(300000/7000)+1;if(1+ltxPolls>50)throw new Error(`LTX polling can exceed the free Worker subrequest ceiling: ${1+ltxPolls}`);
 if(!pixazo.includes('timed out after ${LTX_TIMEOUT_MS / 1000} seconds'))throw new Error('LTX timeout error must report the actual configured timeout.');
 const animation=read('worker/src/animation-jobs.ts');
-for(const token of ['generation_type','GENERATIVE_VIDEO','CAMERA_MOTION_FALLBACK','asset_id','pushClipOnce'])if(!animation.includes(token))throw new Error(`Animation job integrity contract missing ${token}.`);
+for(const token of ['generation_type','GENERATIVE_VIDEO','CAMERA_MOTION_FALLBACK','asset_id','pushClipOnce','alarm_fired','last_error'])if(!animation.includes(token))throw new Error(`Animation job integrity/recovery contract missing ${token}.`);
 const integrity=read('worker/src/render-integrity.ts');
 for(const token of ['buildCoverageManifest','assertSufficientCoverage','INSUFFICIENT_UNIQUE_VISUAL_COVERAGE','MEDIA_INTEGRITY_DUPLICATE_ASSET','MEDIA_INTEGRITY_DUPLICATE_SOURCE','CAMERA_MOTION_FALLBACK','timeline_start_seconds','timeline_end_seconds'])if(!integrity.includes(token))throw new Error(`Render integrity guard missing ${token}.`);
 const shotstack=read('worker/src/shotstack-gateway.ts');
@@ -47,10 +47,15 @@ if(shotstack.includes('while (cursor < targetDuration'))throw new Error('Forbidd
 if(shotstack.includes('previousScene'))throw new Error('Old adjacent-scene-only reuse guard remains; it is insufficient and must not be used as the assembly invariant.');
 const skills=read('worker/src/skills.ts');
 for(const token of ['normalizeWorldReveal','assertWorldLocked','compileGenerationPrompt','timelineGuardian','validateMediaRecord','providerResult'])if(!skills.includes(token))throw new Error(`Arena skill layer missing ${token}.`);
+const validator=read('worker/src/storyboard-validator.ts');
+for(const token of ['partial = false','TIMELINE_EPSILON_SECONDS'])if(!validator.includes(token))throw new Error(`Storyboard validator partial/timestamp tolerance missing ${token}.`);
+const validated=read('worker/src/arena-validated-entry.ts');
+if(!validated.includes("const partial = operation === 'sceneImages'"))throw new Error('Scene image validation must allow isolated per-scene requests.');
+if(!validated.includes('export { BeatVisionAnimationJob }'))throw new Error('Durable Object class is not exported by the deployed Worker entrypoint.');
 const fallback=read('worker/src/video-fallback-gateway.ts');
 for(const token of ['approval_status','generation_type:\'GENERATIVE_VIDEO\'','asset_id'])if(!fallback.includes(token))throw new Error(`Motion output identity contract missing ${token}.`);
 const wrangler=read('worker/wrangler.toml');
-if(!wrangler.includes('main = "src/arena-entry.ts"'))throw new Error('Arena entry is not the deployed Worker entrypoint.');
+if(!wrangler.includes('main = "src/arena-validated-entry.ts"'))throw new Error('Wrangler entrypoint does not match the deployed validated Worker.');
 console.log('STATIC AUDIT PASS');
 console.log(`Checked ${required.length} source/config files.`);
 console.log('Visual planning: song-grounded dynamic beats with coverage, semantic-grounding, duplicate, and reuse gates.');
