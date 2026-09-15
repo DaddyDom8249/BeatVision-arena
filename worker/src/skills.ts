@@ -123,6 +123,7 @@ export function compileGenerationPrompt(input: {
 export function timelineGuardian(storyboard: any, songDuration?: number) {
   const scenes = Array.isArray(storyboard?.scenes) ? storyboard.scenes : Array.isArray(storyboard?.visual_beats) ? storyboard.visual_beats : [];
   const duration = Number(songDuration ?? storyboard?.songDuration ?? storyboard?.song_duration ?? 0);
+  const TIMELINE_EPSILON_SECONDS = 0.02;
   const issues: string[] = [];
   let cursor = 0;
   for (let i = 0; i < scenes.length; i += 1) {
@@ -130,9 +131,9 @@ export function timelineGuardian(storyboard: any, songDuration?: number) {
     const start = Number(s.startTime ?? s.start_time ?? 0);
     const end = Number(s.endTime ?? s.end_time ?? start + Number(s.duration_seconds ?? s.duration ?? 0));
     if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) issues.push(`scene ${i + 1}: invalid duration`);
-    if (start < cursor - 0.001) issues.push(`scene ${i + 1}: overlap`);
-    if (start > cursor + 0.001) issues.push(`scene ${i + 1}: gap`);
-    if (duration > 0 && end > duration + 0.001) issues.push(`scene ${i + 1}: outside song`);
+    if (start < cursor - TIMELINE_EPSILON_SECONDS) issues.push(`scene ${i + 1}: overlap`);
+    if (start > cursor + TIMELINE_EPSILON_SECONDS) issues.push(`scene ${i + 1}: gap`);
+    if (duration > 0 && end > duration + TIMELINE_EPSILON_SECONDS) issues.push(`scene ${i + 1}: outside song`);
     cursor = Math.max(cursor, end);
   }
   if (duration > 0 && cursor < duration - 0.35) issues.push(`coverage ends at ${cursor.toFixed(3)}s of ${duration.toFixed(3)}s`);
