@@ -5,7 +5,7 @@ export type StoryboardValidationIssue = {
   message: string;
 };
 
-export function validateStoryboard(storyboard: any, songDuration?: number) {
+export function validateStoryboard(storyboard: any, songDuration?: number, partial = false) {
   const issues: StoryboardValidationIssue[] = [];
   const scenes = Array.isArray(storyboard?.scenes)
     ? storyboard.scenes
@@ -34,11 +34,13 @@ export function validateStoryboard(storyboard: any, songDuration?: number) {
     if (start < -0.001 || (duration > 0 && end > duration + 0.001)) {
       issues.push({ code: 'OUTSIDE_SONG', severity: 'error', scene: number, message: `Scene ${number} falls outside the song timeline.` });
     }
-    if (start < cursor - 0.001) {
-      issues.push({ code: 'TIMELINE_OVERLAP', severity: 'error', scene: number, message: `Scene ${number} overlaps the preceding scene.` });
-    }
-    if (start > cursor + 0.001) {
-      issues.push({ code: 'TIMELINE_GAP', severity: 'error', scene: number, message: `Timeline gap detected before scene ${number}.` });
+    if (!partial) {
+      if (start < cursor - 0.001) {
+        issues.push({ code: 'TIMELINE_OVERLAP', severity: 'error', scene: number, message: `Scene ${number} overlaps the preceding scene.` });
+      }
+      if (start > cursor + 0.001) {
+        issues.push({ code: 'TIMELINE_GAP', severity: 'error', scene: number, message: `Timeline gap detected before scene ${number}.` });
+      }
     }
     cursor = Math.max(cursor, end);
 
@@ -56,7 +58,7 @@ export function validateStoryboard(storyboard: any, songDuration?: number) {
     }
   }
 
-  if (duration > 0 && cursor < duration - 0.35) {
+  if (!partial && duration > 0 && cursor < duration - 0.35) {
     issues.push({ code: 'INCOMPLETE_COVERAGE', severity: 'error', message: `Storyboard ends at ${cursor.toFixed(3)}s but song duration is ${duration.toFixed(3)}s.` });
   }
 
