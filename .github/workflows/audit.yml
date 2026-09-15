@@ -36,6 +36,9 @@ jobs:
       - name: Storyboard integrity regression tests
         run: node --experimental-strip-types --test worker/src/storyboard-validator.test.ts
 
+      - name: Composition and reuse regression tests
+        run: node --experimental-strip-types --test worker/src/composition-model.test.ts
+
       - name: Worker bundle/type-surface checks
         run: |
           npx --yes esbuild worker/src/arena-validated-entry.ts --bundle --format=esm --platform=neutral --outfile=/tmp/beatvision-arena-worker.mjs
