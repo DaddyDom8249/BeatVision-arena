@@ -34,9 +34,10 @@ export default {
       const storyboard = payload?.storyboard;
       if (storyboard && ['sceneImages', 'assemble'].includes(operation)) {
         const target = Number(payload?.song_duration_seconds ?? payload?.songDuration ?? storyboard?.songDuration ?? storyboard?.song_duration ?? 0);
-        const validation = validateStoryboard(storyboard, target > 0 ? target : undefined);
-        const timeline = timelineGuardian(storyboard, target > 0 ? target : undefined);
-        const timelineIssues = timeline.issues.map((message: string) => ({ code: 'TIMELINE_GUARDIAN', severity: 'error' as const, message }));
+        const partial = operation === 'sceneImages';
+        const validation = validateStoryboard(storyboard, target > 0 ? target : undefined, partial);
+        const timeline = timelineGuardian(storyboard, partial ? undefined : (target > 0 ? target : undefined));
+        const timelineIssues = partial ? [] : timeline.issues.map((message: string) => ({ code: 'TIMELINE_GUARDIAN', severity: 'error' as const, message }));
         const issues = [...validation.issues, ...timelineIssues];
         if (issues.some(issue => issue.severity === 'error')) {
           return json(r, { ok: false, contract_version: body?.contract_version || '1.1', status: 'storyboard_integrity_rejected', error: 'Storyboard failed deterministic integrity validation.', issues }, 422);
