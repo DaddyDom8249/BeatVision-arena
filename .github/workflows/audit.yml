@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   audit:
-    name: Static, bundle, and live failure-path audit
+    name: Static, bundle, security, and failure-path audit
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -32,6 +32,10 @@ jobs:
           node --check tests/static-audit.mjs
           node --check tests/render-integrity.mjs
           node --check tests/live-smoke.mjs
+          node --check tests/security-audit.mjs
+          node --check tests/animation-state-audit.mjs
+          node --check tests/termux-runner-audit.mjs
+          node --check tests/termux-full-pipeline.mjs
 
       - name: Worker bundle/type-surface checks
         run: |
@@ -40,6 +44,15 @@ jobs:
 
       - name: Static architecture audit
         run: node tests/static-audit.mjs
+
+      - name: Security regression audit
+        run: node tests/security-audit.mjs
+
+      - name: Persistent animation state audit
+        run: node tests/animation-state-audit.mjs
+
+      - name: Termux runner safety audit
+        run: node tests/termux-runner-audit.mjs
 
       - name: Render integrity adversarial tests
         run: node tests/render-integrity.mjs

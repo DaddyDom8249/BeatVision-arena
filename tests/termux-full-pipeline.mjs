@@ -8,15 +8,18 @@
  *
  * Safety rules:
  * - Network retries only retry interrupted HTTP transport, never provider jobs.
- * - Persistent animation is POSTed exactly once per persisted job.
- * - If Termux restarts, an existing animation job_id is resumed/polled.
+ * - Persistent animation uses one deterministic job ID and is resumed only after
+ *   the server-side job is verified or the original submission is retried with
+ *   that same idempotent job ID.
+ * - Run inputs are fingerprinted so an old output directory cannot be reused
+ *   for a different song, lyrics, style, audio file, or gateway.
  * - Every successful stage response is persisted before advancing.
  */
 
-const fs = require('node:fs');
-const path = require('node:path');
-const crypto = require('node:crypto');
-const { execFileSync } = require('node:child_process');
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 
 const GATEWAY = (process.env.BEATVISION_GATEWAY || 'https://beatvision-provider-arena.richardcranium466.workers.dev').replace(/\/$/, '');
 const TOKEN = process.env.BEATVISION_GATEWAY_TOKEN || '';
@@ -51,14 +54,14 @@ const statePath = path.join(OUT, 'state.json');
 const eventsPath = path.join(OUT, 'events.jsonl');
 const finalReportPath = path.join(OUT, 'final-report.json');
 let state = fs.existsSync(statePath) ? JSON.parse(fs.readFileSync(statePath, 'utf8')) : {
-  version: 1,
+  version: 2,
   started_at: new Date().toISOString(),
   gateway: GATEWAY,
   contract_version: CONTRACT,
   song_title: songTitle,
   style,
   stages: {},
-  animation: { post_count: 0, job_id: null, status: null },
+  animation: { post_count: 0, job_id: null, status: null, submission_state: 'not_started' },
   complete: false
 };
 
@@ -98,6 +101,50 @@ function audioDataUrl() {
   const mime = ({'.mp3':'audio/mpeg','.wav':'audio/wav','.m4a':'audio/mp4','.aac':'audio/aac','.flac':'audio/flac'})[ext] || 'audio/mpeg';
   const buf = fs.readFileSync(AUDIO);
   return { data: `data:${mime};base64,${buf.toString('base64')}`, mime, name: path.basename(AUDIO), size: stat.size, sha256: sha256File(AUDIO) };
+}
+function inputFingerprint(audio) {
+  return crypto.createHash('sha256').update(JSON.stringify({
+    gateway: GATEWAY,
+    contract_version: CONTRACT,
+    song_title: songTitle,
+    style,
+    lyrics: readLyrics(),
+    lyrics_file: lyricsFile,
+    audio_sha256: audio.sha256,
+    audio_size_bytes: audio.size,
+    audio_mime_type: audio.mime,
+    audio_filename: audio.name
+  })).digest('hex');
+}
+function establishInputFingerprint(audio) {
+  const fingerprint = inputFingerprint(audio);
+  if (state.input_fingerprint) {
+    if (state.input_fingerprint !== fingerprint) {
+      throw new Error(`Input fingerprint mismatch for ${OUT}. Refusing to resume state created for different project inputs.`);
+    }
+    return fingerprint;
+  }
+  const priorAudioInfoPath = path.join(OUT, 'audio', 'info.json');
+  const priorInputPath = path.join(OUT, 'audio', 'input.json');
+  let priorAudio = null;
+  let priorInput = null;
+  try { if (fs.existsSync(priorAudioInfoPath)) priorAudio = JSON.parse(fs.readFileSync(priorAudioInfoPath, 'utf8')); } catch {}
+  try { if (fs.existsSync(priorInputPath)) priorInput = JSON.parse(fs.readFileSync(priorInputPath, 'utf8')); } catch {}
+  if (state.animation?.job_id || Object.values(state.stages || {}).some(x => x?.complete)) {
+    const sameKnownInputs = priorAudio?.sha256 === audio.sha256 && priorAudio?.bytes === audio.size && priorInput?.song_title === songTitle && priorInput?.style === style && priorInput?.lyrics === readLyrics() && state.gateway === GATEWAY && state.contract_version === CONTRACT;
+    if (!sameKnownInputs) {
+      throw new Error(`Legacy state in ${OUT} has no trusted input fingerprint. Refusing unsafe resume. Use a new BEATVISION_OUTPUT directory for a fresh run.`);
+    }
+    state.input_fingerprint = fingerprint;
+    state.fingerprint_migrated_at = new Date().toISOString();
+    saveState();
+    event('input_fingerprint_migrated', { fingerprint });
+    return fingerprint;
+  }
+  state.input_fingerprint = fingerprint;
+  saveState();
+  event('input_fingerprint_created', { fingerprint });
+  return fingerprint;
 }
 async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function headers(token = TOKEN) {
@@ -192,51 +239,95 @@ async function runSceneImages(payload) {
       event('scene_image_failed', failure);
     }
   }
-  if (!outputs.length && failed.length) throw new Error('sceneImages failed for every scene.');
-  const result = { images: outputs, models_used: [...models], scene_count: outputs.length, requested_scene_count: scenes.length, failed_scenes: failed, free_only: true };
+  if (failed.length) {
+    throw new Error(`sceneImages incomplete: ${failed.length} of ${scenes.length} scenes failed. Animation is blocked until every required scene image exists.`);
+  }
+  const result = { images: outputs, models_used: [...models], scene_count: outputs.length, requested_scene_count: scenes.length, failed_scenes: [], free_only: true };
   saveJson('images/result.json', result);
   state.stages.images = { complete: true, operation: 'sceneImages', completed_at: new Date().toISOString(), result };
   saveState();
-  event('stage_complete', { stage: 'images', generated: outputs.length, failed: failed.length });
+  event('stage_complete', { stage: 'images', generated: outputs.length, failed: 0 });
   return result;
 }
+async function getAnimationJob(jobId, evidenceName = `animation/preflight-${Date.now()}`) {
+  const url = `${GATEWAY}/v1/video/animate/jobs/${jobId}`;
+  const req = { method: 'GET', url, headers: headers() };
+  const r = await fetchWithNetworkRetry(url, { headers: req.headers }, 'Animation job preflight');
+  const parsed = await parseResponse(r);
+  requestEvidence(evidenceName, req, parsed);
+  return { ...parsed, job: parsed.data };
+}
+async function submitAnimation(jobId, payload) {
+  const url = `${GATEWAY}/v1/video/animate/jobs/${jobId}`;
+  const body = { contract_version: CONTRACT, operation: 'animate', storyboard: payload.storyboard, images: payload.images };
+  const reqHeaders = { ...headers(), 'X-BeatVision-Contract': CONTRACT, 'X-BeatVision-Request': jobId };
+  if (!Array.isArray(body.storyboard?.scenes) || !body.storyboard.scenes.length) throw new Error('Refusing animation submission: storyboard.scenes is empty.');
+  if (!Array.isArray(body.images?.images) || !body.images.images.length) throw new Error('Refusing animation submission: images.images is empty.');
+  const req = { method: 'POST', url, headers: reqHeaders, body };
+  const started = Date.now();
+  const r = await fetchWithNetworkRetry(url, { method: 'POST', headers: reqHeaders, body: JSON.stringify(body) }, 'Animation job submission');
+  const parsed = await parseResponse(r);
+  const res = { ...parsed, request_id: parsed.data?.request_id || jobId, elapsed_ms: Date.now() - started };
+  requestEvidence('animation/submit', req, res);
+  return { r, res };
+}
 async function persistentAnimation(payload) {
-  if (state.animation.job_id) {
-    event('animation_resume', { job_id: state.animation.job_id, post_count: state.animation.post_count });
-  } else {
-    const jobId = crypto.randomUUID();
-    const url = `${GATEWAY}/v1/video/animate/jobs/${jobId}`;
-    const body = { contract_version: CONTRACT, operation: 'animate', storyboard: payload.storyboard, images: payload.images };
-    const reqHeaders = { ...headers(), 'X-BeatVision-Contract': CONTRACT, 'X-BeatVision-Request': jobId };
-    if (!Array.isArray(body.storyboard?.scenes) || !body.storyboard.scenes.length) throw new Error('Refusing animation submission: storyboard.scenes is empty.');
-    if (!Array.isArray(body.images?.images) || !body.images.images.length) throw new Error('Refusing animation submission: images.images is empty.');
-    state.animation = { job_id: jobId, post_count: 0, status: 'submitting', created_at: new Date().toISOString() };
+  let jobId = state.animation.job_id;
+  if (state.animation.status === 'submit_failed') {
+    state.animation = { post_count: 0, job_id: null, status: null, submission_state: 'not_started' };
     saveState();
-    event('animation_submit_start', { job_id: jobId, scenes: body.storyboard.scenes.length, images: body.images.images.length, safety: 'ONE_POST_ONLY' });
-    const req = { method: 'POST', url, headers: reqHeaders, body };
-    const started = Date.now();
-    const r = await fetchWithNetworkRetry(url, { method: 'POST', headers: reqHeaders, body: JSON.stringify(body) }, 'Animation job submission');
-    const parsed = await parseResponse(r);
-    const res = { ...parsed, request_id: parsed.data?.request_id || jobId, elapsed_ms: Date.now() - started };
-    requestEvidence('animation/submit', req, res);
+    event('animation_submit_failed_state_cleared', { reason: 'A failed POST is not a resumable server-side job.' });
+    jobId = null;
+  }
+  if (!jobId) {
+    jobId = crypto.randomUUID();
+    state.animation = { job_id: jobId, post_count: 0, status: 'submitting', submission_state: 'in_flight', created_at: new Date().toISOString() };
+    saveState();
+    event('animation_submit_start', { job_id: jobId, scenes: payload.storyboard.scenes.length, images: payload.images.images.length, safety: 'ONE_DETERMINISTIC_JOB_ID' });
+    const { r, res } = await submitAnimation(jobId, payload);
     if (!r.ok) {
-      state.animation.status = 'submit_failed'; state.animation.submit_response = res; saveState();
-      throw Object.assign(new Error(`${r.status}: ${parsed.data?.error || JSON.stringify(parsed.data)}`), { status: r.status, data: parsed.data, requestId: res.request_id });
+      state.animation.status = 'submit_failed'; state.animation.submission_state = 'not_started'; state.animation.submit_response = res; state.animation.job_id = null; saveState();
+      throw Object.assign(new Error(`${r.status}: ${res.data?.error || JSON.stringify(res.data)}`), { status: r.status, data: res.data, requestId: res.request_id });
     }
     state.animation.post_count = 1;
-    state.animation.status = parsed.data?.status || 'queued';
-    state.animation.accepted_response = parsed.data;
+    state.animation.status = res.data?.status || 'queued';
+    state.animation.submission_state = 'accepted';
+    state.animation.accepted_response = res.data;
     saveState();
     event('animation_submit_accepted', { job_id: jobId, status: state.animation.status, post_count: 1 });
+  } else if (state.animation.submission_state === 'in_flight' || state.animation.status === 'submitting') {
+    const preflight = await getAnimationJob(jobId);
+    if (preflight.ok && preflight.job && preflight.job.status !== 'not_found') {
+      state.animation.status = preflight.job.status;
+      state.animation.submission_state = 'accepted';
+      state.animation.post_count = Math.max(1, state.animation.post_count || 0);
+      state.animation.accepted_response = preflight.job;
+      saveState();
+      event('animation_submission_verified_after_restart', { job_id: jobId, status: preflight.job.status, post_count: state.animation.post_count });
+    } else if (preflight.status === 404) {
+      const { r, res } = await submitAnimation(jobId, payload);
+      if (!r.ok) {
+        state.animation.status = 'submit_failed'; state.animation.submission_state = 'not_started'; state.animation.submit_response = res; state.animation.job_id = null; saveState();
+        throw Object.assign(new Error(`${r.status}: ${res.data?.error || JSON.stringify(res.data)}`), { status: r.status, data: res.data, requestId: res.request_id });
+      }
+      state.animation.post_count = 1;
+      state.animation.status = res.data?.status || 'queued';
+      state.animation.submission_state = 'accepted';
+      state.animation.accepted_response = res.data;
+      saveState();
+      event('animation_submit_recovered', { job_id: jobId, status: state.animation.status, post_count: 1 });
+    } else {
+      throw new Error(`Cannot safely resume animation job ${jobId}: server preflight returned ${preflight.status}. No duplicate POST was attempted.`);
+    }
+  } else {
+    event('animation_resume', { job_id: jobId, post_count: state.animation.post_count, submission_state: state.animation.submission_state });
   }
   while (true) {
-    const jobId = state.animation.job_id;
     const url = `${GATEWAY}/v1/video/animate/jobs/${jobId}`;
     const req = { method: 'GET', url, headers: headers() };
     const r = await fetchWithNetworkRetry(url, { headers: req.headers }, 'Animation job status');
     const parsed = await parseResponse(r);
-    const res = { ...parsed, elapsed_ms: 0 };
-    requestEvidence(`animation/status-${Date.now()}`, req, res);
+    requestEvidence(`animation/status-${Date.now()}`, req, parsed);
     if (!r.ok) throw Object.assign(new Error(`${r.status}: ${parsed.data?.error || JSON.stringify(parsed.data)}`), { status: r.status, data: parsed.data });
     const job = parsed.data;
     state.animation.last_status = job;
@@ -247,7 +338,7 @@ async function persistentAnimation(payload) {
     if (['completed','partial','failed'].includes(job.status)) {
       saveJson('animation/final-job.json', job);
       if (job.status === 'failed' && !(job.clips || []).length) throw new Error('Persistent animation failed for every scene.');
-      const motion = { status: job.failed?.length ? 'partial' : 'animated', clips: job.clips || [], video_url: job.clips?.[0]?.video_url || null, source: 'Pixazo free LTX image-to-video', models_used: ['ltx-video'], scene_count: job.clips?.length || 0, requested_scene_count: job.scenes?.length || 0, failed_scenes: job.failed || [] };
+      const motion = { status: job.failed?.length ? 'partial' : 'animated', clips: job.clips || [], video_url: job.clips?.[0]?.video_url || null, source: job.clips?.some(x => x.generation_type === 'CAMERA_MOTION_FALLBACK') ? 'mixed_generation' : 'Pixazo free LTX image-to-video', models_used: [...new Set((job.clips || []).map(x => x.model).filter(Boolean))], scene_count: job.clips?.length || 0, requested_scene_count: job.scenes?.length || 0, failed_scenes: job.failed || [] };
       state.stages.animation = { complete: true, operation: 'persistentAnimation', completed_at: new Date().toISOString(), result: motion };
       saveJson('animation/result.json', motion); saveState();
       return motion;
@@ -259,15 +350,18 @@ async function downloadFinal(result) {
   const candidates = [result?.video_url, result?.preview_url, result?.url, result?.output?.url].filter(Boolean);
   if (!candidates.length) { event('final_download_skipped', { reason: 'No video URL in assembly result.' }); return null; }
   const url = candidates[0];
-  if (!/^https?:\/\//i.test(url)) { event('final_download_skipped', { reason: 'Final URL is not HTTP(S).', url }); return null; }
+  if (!/^https:\/\//i.test(url)) { event('final_download_skipped', { reason: 'Final URL must use HTTPS.' }); return null; }
   const target = path.join(OUT, 'final', 'beatvision-final.mp4');
   event('final_download_start', { url: url.replace(/([?&](?:token|key|signature)=[^&]+)/ig, '$1=[REDACTED]') });
   const r = await fetchWithNetworkRetry(url, {}, 'Final MP4 download');
   if (!r.ok) throw new Error(`Final MP4 download failed: ${r.status}`);
+  const contentType = String(r.headers.get('content-type') || '').toLowerCase();
+  if (contentType && !contentType.includes('video/mp4') && !contentType.includes('application/octet-stream')) throw new Error(`Final download returned unexpected content type: ${contentType}`);
   const buf = Buffer.from(await r.arrayBuffer());
+  fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, buf);
   const stat = fs.statSync(target);
-  saveJson('final/download.json', { url, path: target, bytes: stat.size, sha256: sha256File(target), downloaded_at: new Date().toISOString() });
+  saveJson('final/download.json', { url, path: target, bytes: stat.size, content_type: contentType, sha256: sha256File(target), downloaded_at: new Date().toISOString() });
   event('final_download_complete', { path: target, bytes: stat.size, sha256: sha256File(target) });
   return target;
 }
@@ -291,8 +385,9 @@ async function main() {
   console.log('');
 
   const audio = audioDataUrl();
+  establishInputFingerprint(audio);
   saveJson('audio/info.json', { file: AUDIO, name: audio.name, mime: audio.mime, bytes: audio.size, sha256: audio.sha256, browser_equivalent_limit: MAX_AUDIO_BYTES });
-  event('run_start', { gateway: GATEWAY, audio: AUDIO, song_title: songTitle, style, contract_version: CONTRACT, resumed: !!state.animation.job_id });
+  event('run_start', { gateway: GATEWAY, audio: AUDIO, song_title: songTitle, style, contract_version: CONTRACT, input_fingerprint: state.input_fingerprint, resumed: !!state.animation.job_id });
 
   const health = await gatewayGet('/health', 'health');
   saveJson('gateway/health.json', health);
@@ -313,7 +408,7 @@ async function main() {
   const probe = probeMedia(finalFile);
 
   state.complete = true; state.completed_at = new Date().toISOString(); state.final = { assembled, final_file: finalFile, probe }; saveState();
-  const report = { ok: true, completed_at: state.completed_at, gateway: GATEWAY, contract_version: CONTRACT, song_title: songTitle, style, audio: { file: AUDIO, bytes: audio.size, sha256: audio.sha256 }, stages: Object.fromEntries(Object.entries(state.stages).map(([k,v]) => [k, { complete: v.complete, operation: v.operation, status: v.meta?.status }])), animation: { job_id: state.animation.job_id, post_count: state.animation.post_count, final_status: state.animation.status, scene_count: motion.scene_count, failed_scene_count: motion.failed_scenes.length }, assembly: assembled, final_file: finalFile, final_media_probe: probe };
+  const report = { ok: true, completed_at: state.completed_at, gateway: GATEWAY, contract_version: CONTRACT, input_fingerprint: state.input_fingerprint, song_title: songTitle, style, audio: { file: AUDIO, bytes: audio.size, sha256: audio.sha256 }, stages: Object.fromEntries(Object.entries(state.stages).map(([k,v]) => [k, { complete: v.complete, operation: v.operation, status: v.meta?.status }])), animation: { job_id: state.animation.job_id, post_count: state.animation.post_count, final_status: state.animation.status, scene_count: motion.scene_count, failed_scene_count: motion.failed_scenes.length }, assembly: assembled, final_file: finalFile, final_media_probe: probe };
   saveJson('final-report.json', report);
   event('run_complete', { ok: true, final_file: finalFile, animation_post_count: state.animation.post_count });
   console.log('\n==========================================');
@@ -324,7 +419,7 @@ async function main() {
   console.log(`Animation POST count: ${state.animation.post_count}`);
 }
 main().catch(error => {
-  state.failed = { at: new Date().toISOString(), status: error.status || 0, error: error.message, animation_post_count: state.animation.post_count, animation_job_id: state.animation.job_id };
+  state.failed = { at: new Date().toISOString(), status: error.status || 0, error: error.message, animation_post_count: state.animation.post_count, animation_job_id: state.animation.job_id, input_fingerprint: state.input_fingerprint || null };
   saveState();
   saveJson('final-report.json', { ok: false, error: state.failed, state });
   event('run_failed', state.failed);
