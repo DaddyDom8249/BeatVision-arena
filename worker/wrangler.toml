@@ -1,5 +1,5 @@
 name = "beatvision-provider-arena"
-main = "src/arena-entry.ts"
+main = "src/arena-validated-entry.ts"
 compatibility_date = "2026-09-09"
 
 [vars]
@@ -16,10 +16,6 @@ PIXAZO_HERO_IMAGE_MODEL = "sdxl"
 name = "ANIMATION_JOBS"
 class_name = "BeatVisionAnimationJob"
 
-# Declarative Durable Object lifecycle.
-# BeatVisionAnimationJob is the live SQLite-backed class created by legacy v1.
-# BeatVisionPipelineJob was the rolled-back v2 pipeline class and is explicitly
-# retired here so the old migration history does not have to be replayed.
 [exports.BeatVisionAnimationJob]
 type = "durable-object"
 storage = "sqlite"
@@ -28,27 +24,12 @@ storage = "sqlite"
 type = "durable-object"
 state = "deleted"
 
-# Free Pixazo models used by the active Arena creative path only:
-# Flux Schnell = fast world/character/environment concepts and scene fallback.
-# SDXL = world hero/keyframes and preferred scene imagery.
-# LTX = image-to-video generative motion.
-# Tracks = optional music/score generation.
-#
-# Scene generation is wrapped by src/arena-entry.ts so transient SDXL failures
-# are retried before falling back to free Flux Schnell. No paid model is used.
-# Stable Diffusion 3.5 is intentionally NOT configured or called by Arena.
-#
-# Pollinations remains only for the already-proven Whisper audio analysis
-# and language/world-direction calls because Pixazo does not replace those
-# free capabilities in the current Arena architecture.
+# Free Pixazo models used by the active Arena creative path only.
 # Shotstack Sandbox remains the deterministic assembly layer.
-# Hugging Face is intentionally not used by the Arena video path.
-#
+# Pollinations remains for Whisper/language/world-direction calls.
 # Secrets expected by the worker:
 # wrangler secret put GATEWAY_TOKEN
 # wrangler secret put LANGUAGE_PROVIDER_TOKEN
 # wrangler secret put AUDIO_PROVIDER_TOKEN
 # wrangler secret put PIXAZO_API_KEY
 # wrangler secret put SHOTSTACK_API_KEY
-#
-# SHOTSTACK_API_KEY must be the Shotstack Sandbox/Stage key.

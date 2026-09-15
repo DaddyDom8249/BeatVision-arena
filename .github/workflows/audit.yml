@@ -33,9 +33,12 @@ jobs:
           node --check tests/render-integrity.mjs
           node --check tests/live-smoke.mjs
 
+      - name: Storyboard integrity regression tests
+        run: node --experimental-strip-types --test worker/src/storyboard-validator.test.ts
+
       - name: Worker bundle/type-surface checks
         run: |
-          npx --yes esbuild worker/src/arena-entry.ts --bundle --format=esm --platform=neutral --outfile=/tmp/beatvision-arena-worker.mjs
+          npx --yes esbuild worker/src/arena-validated-entry.ts --bundle --format=esm --platform=neutral --outfile=/tmp/beatvision-arena-worker.mjs
           npx --yes esbuild worker/src/index.ts --bundle --format=esm --platform=neutral --outfile=/tmp/beatvision-arena-index.mjs
 
       - name: Static architecture audit

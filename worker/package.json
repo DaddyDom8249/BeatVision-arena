@@ -2,5 +2,7 @@
   "name": "beatvision-provider-arena-worker",
   "private": true,
   "type": "module",
-  "dependencies": {}
+  "scripts": {
+    "test:storyboard": "node --experimental-strip-types --test src/storyboard-validator.test.ts"
+  }
 }
