@@ -67,7 +67,6 @@ export function buildCompositionDocument(input: any): CompositionDocument {
   for (let i = 0; i < shots.length; i++) {
     shots[i].previous_shot_id = i ? shots[i - 1].id : null;
     shots[i].next_shot_id = i + 1 < shots.length ? shots[i + 1].id : null;
-    if (shots[i].end_seconds > duration && duration > 0) shots[i].end_seconds = duration;
   }
 
   const assets = (Array.isArray(input?.assets) ? input.assets : []).map((a: any) => ({
