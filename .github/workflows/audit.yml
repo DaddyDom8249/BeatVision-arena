@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   audit:
-    name: Static, bundle, and live failure-path audit
+    name: Static, bundle, security, and live failure-path audit
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -32,6 +32,7 @@ jobs:
           node --check tests/static-audit.mjs
           node --check tests/render-integrity.mjs
           node --check tests/live-smoke.mjs
+          node --check tests/security-audit.mjs
 
       - name: Storyboard integrity regression tests
         run: node --experimental-strip-types --test worker/src/storyboard-validator.test.ts
@@ -49,6 +50,9 @@ jobs:
 
       - name: Static architecture audit
         run: node tests/static-audit.mjs
+
+      - name: Security regression audit
+        run: node tests/security-audit.mjs
 
       - name: Render integrity adversarial tests
         run: node tests/render-integrity.mjs
