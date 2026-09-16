@@ -1,5 +1,6 @@
 import pixazo from './video-fallback-gateway';
 import { compileMusicalContext } from './musical-structure';
+import { splitLongBeats as splitLongBeatsWithMusic } from './scene-splitting';
 export { BeatVisionAnimationJob } from './animation-jobs';
 
 const BASE = 'https://gateway.pixazo.ai';
@@ -97,20 +98,12 @@ async function resilientSceneImages(r: Request, e: any, body: any, requestId: st
   } catch (error) { return json(r, e, { ok: false, contract_version: CONTRACT, capability: 'image', provider: 'pixazo', status: 'provider_error', request_id: requestId, latency_ms: Date.now() - started, completed_scene_count: images.length, completed_scenes: images.map(image => image.scene), error: String(error instanceof Error ? error.message : error).slice(0, 2200) }, 502); }
 }
 
-function splitLongBeats(storyboard: any) {
-  const source = Array.isArray(storyboard?.scenes) ? storyboard.scenes : Array.isArray(storyboard?.visual_beats) ? storyboard.visual_beats : [];
-  const expanded: any[] = [];
-  for (const original of source) {
-    const start = Number(original?.startTime ?? original?.start_time ?? 0); const end = Number(original?.endTime ?? original?.end_time ?? start + Number(original?.duration_seconds || 4)); const duration = Math.max(.1, end - start), parts = Math.max(1, Math.ceil(duration / 5));
-    for (let part = 0; part < parts; part++) { const a = start + duration * part / parts, b = start + duration * (part + 1) / parts; expanded.push({ ...original, scene: expanded.length + 1, beatId: `${original?.beatId || original?.beat_id || `beat-${expanded.length + 1}`}-part-${part + 1}`, startTime: a, endTime: b, duration_seconds: b - a, visual_variation_part: `${part + 1}/${parts}`, visual_variation_parent: original?.beatId || original?.beat_id || original?.scene || null, reusePolicy: part === 0 ? (original?.reusePolicy || original?.reuse_policy || 'new_visual_event') : 'new_visual_event' }); }
-  }
-  expanded.forEach((b, i) => { b.previousBeat = i ? expanded[i - 1].beatId : null; b.nextBeat = i + 1 < expanded.length ? expanded[i + 1].beatId : null; }); return expanded;
-}
 async function storyboardWithRenderSafeBeats(r: Request, e: any, body: any) {
   const upstream = await pixazo.fetch(new Request(r.url, { method: 'POST', headers: new Headers(r.headers), body: JSON.stringify(body) }), e); if (!upstream.ok) return upstream;
   let data: any; try { data = await upstream.clone().json(); } catch { return upstream; }
   const result = data?.result; if (!result || typeof result !== 'object') return upstream; const scenes = Array.isArray(result.scenes) ? result.scenes : Array.isArray(result.visual_beats) ? result.visual_beats : null; if (!scenes?.length) return upstream;
-  const expanded = splitLongBeats({ ...result, scenes }); if (expanded.length <= scenes.length) return upstream;
+  const audioAnalysis = body?.payload?.audio_analysis || body?.payload?.audioAnalysis || body?.payload?.audio || body?.payload?.analysis;
+  const expanded = splitLongBeatsWithMusic({ ...result, scenes }, audioAnalysis); if (expanded.length <= scenes.length) return upstream;
   const updated = { ...data, result: { ...result, scenes: expanded, visual_beats: expanded, scene_count: expanded.length, render_safe_scene_count: expanded.length, coverage: result.coverage ? { ...result.coverage, visual_beats: expanded.length, render_safe_scene_count: expanded.length, long_beats: 0 } : result.coverage } };
   return new Response(JSON.stringify(updated, null, 2), { status: upstream.status, headers: { 'Content-Type': 'application/json', ...cors(r, e) } });
 }
@@ -118,8 +111,6 @@ async function storyboardWithRenderSafeBeats(r: Request, e: any, body: any) {
 export default { async fetch(r: Request, e: any) {
   if (r.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(r, e) });
   const url = new URL(r.url), path = url.pathname, requestId = r.headers.get('X-BeatVision-Request') || crypto.randomUUID();
-  // Health is intentionally public. Authentication belongs on capability/provider operations,
-  // not on the liveness probe. This keeps monitoring and diagnostics truthful.
   if (path === '/' || path === '/health') return pixazo.fetch(r, e);
   if (e.GATEWAY_TOKEN && r.headers.get('Authorization') !== `Bearer ${e.GATEWAY_TOKEN}`) return json(r, e, { ok: false, error: 'Unauthorized', request_id: requestId }, 401);
   let body: any; try { body = await r.clone().json(); } catch { return pixazo.fetch(r, e); }
