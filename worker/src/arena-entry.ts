@@ -1,6 +1,7 @@
 import pixazo from './video-fallback-gateway';
 import { compileMusicalContext } from './musical-structure';
 import { splitLongBeats as splitLongBeatsWithMusic } from './scene-splitting';
+import { compileCharacterContinuity } from './character-continuity';
 export { BeatVisionAnimationJob } from './animation-jobs';
 
 const BASE = 'https://gateway.pixazo.ai';
@@ -29,6 +30,7 @@ const scenePrompt = (payload: any, scene: any, index: number, total: number) => 
   const locations = clip(JSON.stringify(world?.locations || []), 800);
   const motifs = clip(JSON.stringify(world?.visual_motifs || []), 900);
   const continuity = clip(JSON.stringify(world?.continuity_rules || []), 700);
+  const characterContinuity = compileCharacterContinuity(scene, world);
   const style = clip(payload?.style, 600);
   const musical = compileMusicalContext(payload?.audio_analysis || payload?.audioAnalysis || payload?.audio || payload?.analysis, scene);
   const composition = ['wide environmental establishing composition with the character small in frame', 'medium character-focused composition with visible interaction with the environment', 'tight emotional close-up emphasizing face, hands, or a meaningful object', 'side/profile composition with strong negative space and directional movement', 'low-angle composition making the environment feel imposing around the character', 'high-angle composition revealing spatial relationships', 'silhouette/backlit composition using the established world lighting and atmosphere', 'reflection/foreground-obstruction composition using glass, mirrors, rain, architecture, or another established motif'];
@@ -48,6 +50,7 @@ const scenePrompt = (payload: any, scene: any, index: number, total: number) => 
     locations ? `World locations: ${locations}` : '',
     motifs ? `Visual motifs: ${motifs}` : '',
     continuity ? `Continuity rules: ${continuity}` : '',
+    characterContinuity,
     `Storyboard scene ${index + 1}/${total}: ${clip(JSON.stringify(scene), 1800)}`,
     musical ? `MUSICAL STRUCTURE:\n${musical}` : '',
     'VISUAL DIVERSITY DIRECTIVE:',
