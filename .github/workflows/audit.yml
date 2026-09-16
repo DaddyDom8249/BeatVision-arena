@@ -33,6 +33,7 @@ jobs:
           node --check tests/render-integrity.mjs
           node --check tests/live-smoke.mjs
           node --check tests/security-audit.mjs
+          node --check tests/animation-state-audit.mjs
 
       - name: Storyboard integrity regression tests
         run: node --experimental-strip-types --test worker/src/storyboard-validator.test.ts
@@ -53,6 +54,9 @@ jobs:
 
       - name: Security regression audit
         run: node tests/security-audit.mjs
+
+      - name: Persistent animation state audit
+        run: node tests/animation-state-audit.mjs
 
       - name: Render integrity adversarial tests
         run: node tests/render-integrity.mjs
