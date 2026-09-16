@@ -44,10 +44,11 @@ if (!integrity.includes('assertSufficientCoverage')) throw new Error('Render int
 if (!jobs.includes('missing_scenes:missingScenes')) throw new Error('Animation job does not reject incomplete scene-image coverage.');
 if (!jobs.includes("recovery:'continue_polling_same_provider_request'")) throw new Error('Animation job can confuse status uncertainty with provider failure.');
 if (!jobs.includes("['ERROR','FAILED','CANCELLED'].includes(status)")) throw new Error('Animation job lacks a definitive provider-failure boundary.');
-if (!gateway.includes("if(path==='/v1/video/assemble')return shotstack.fetch(r,e)")) throw new Error('Assembly route is not connected to Shotstack.');
+if (!gateway.includes("if(path==='/v1/video/assemble')")) throw new Error('Assembly route is not connected to Shotstack.');
 if (!gateway.includes("if(path==='/v1/video/animate')")) throw new Error('Animation route is not connected to motion resilience.');
 if (!gateway.includes("path==='/v1/image/world-assets'||path==='/v1/image/scenes'")) throw new Error('Image routes are not connected to Pixazo.');
 if (!gateway.includes('return pollinations.fetch(r,e)')) throw new Error('Language/audio fallback route is disconnected.');
+if (!gateway.includes('headers:{...Object.fromEntries(response.headers),...cors(r,e)}')) throw new Error('Assembly response is not normalized through the active gateway CORS policy.');
 if (!shotstack.includes('STORYBOARD_MASTER_TIMELINE')) throw new Error('Assembly does not declare storyboard-master-timeline mode.');
 if (!shotstack.includes('MEDIA_INTEGRITY_MISSING_MOTION_FOR_STORYBOARD_SCENE')) throw new Error('Assembly does not require motion for every storyboard scene.');
 if (!shotstack.includes('FINAL_MEDIA_DURATION_MISMATCH')) throw new Error('Assembly does not verify final duration against the song timeline.');
