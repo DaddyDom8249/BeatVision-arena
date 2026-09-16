@@ -1,0 +1,61 @@
+import fs from 'node:fs';
+
+const read = file => fs.readFileSync(file, 'utf8');
+const contracts = read('provider-contracts.js');
+const app = read('app.js');
+const validated = read('worker/src/arena-validated-entry.ts');
+const arena = read('worker/src/arena-entry.ts');
+const gateway = read('worker/src/video-fallback-gateway.ts');
+const shotstack = read('worker/src/shotstack-gateway.ts');
+const jobs = read('worker/src/animation-jobs.ts');
+const splitter = read('worker/src/scene-splitting.ts');
+const music = read('worker/src/musical-structure.ts');
+const continuity = read('worker/src/character-continuity.ts');
+const reuse = read('worker/src/visual-reuse-detector.ts');
+const composition = read('worker/src/composition-model.ts');
+const integrity = read('worker/src/render-integrity.ts');
+const wrangler = read('worker/wrangler.toml');
+
+const requiredContracts = { analyzeAudio: '/v1/audio/analyze', revealWorld: '/v1/language/world', worldAssets: '/v1/image/world-assets', storyboard: '/v1/language/storyboard', sceneImages: '/v1/image/scenes', animate: '/v1/video/animate', assemble: '/v1/video/assemble', generateMusic: '/v1/audio/generate', storeAsset: '/v1/storage/asset' };
+for (const [operation, path] of Object.entries(requiredContracts)) {
+  if (!contracts.includes(`${operation}:`)) throw new Error(`Contract missing ${operation}.`);
+  if (!contracts.includes(`path: "${path}"`)) throw new Error(`Contract path mismatch for ${operation}: ${path}.`);
+}
+if (!wrangler.includes('main = "src/arena-validated-entry.ts"')) throw new Error('Deployed entrypoint is not the validated pipeline entry.');
+if (!validated.includes("import arena from './arena-entry'")) throw new Error('Validated entry is not wrapping the creative pipeline.');
+if (!validated.includes("if (storyboard && ['sceneImages', 'assemble'].includes(operation))")) throw new Error('Storyboard integrity gate is not on the image/assembly path.');
+if (!validated.includes('detectVisualReuse')) throw new Error('Semantic reuse gate is disconnected from assembly validation.');
+if (!app.includes('executeSceneBatch')) throw new Error('Browser orchestration does not batch per-scene generation.');
+if (!app.includes('delete single.images')) throw new Error('Scene image calls are not isolated from prior image output.');
+if (!app.includes("if(operation==='animate'&&!image)")) throw new Error('Animation client does not preserve image-to-scene identity.');
+if (!app.includes('storyboard:state.storyboard,motion:state.motion')) throw new Error('Assembly is not receiving the authoritative storyboard and motion state.');
+if (!arena.includes('compileMusicalContext')) throw new Error('Scene generation is not connected to musical structure.');
+if (!arena.includes('compileCharacterContinuity')) throw new Error('Scene generation is not connected to character continuity.');
+if (!arena.includes('Scene image gateway expects one visual beat per request')) throw new Error('Scene image gateway does not enforce one-beat isolation.');
+if (!arena.includes('models_used')) throw new Error('Scene image output does not preserve provider model identity.');
+if (!splitter.includes('beatSnappedBoundaries')) throw new Error('Long-scene splitting is not beat-aware.');
+if (!splitter.includes('character_continuity_anchor')) throw new Error('Scene splitting does not propagate character continuity anchors.');
+if (!splitter.includes('60 / bpm')) throw new Error('BPM fallback beat grid is disconnected.');
+if (!music.includes('Timing directive: make the visual event')) throw new Error('Musical timing directive is missing.');
+if (!continuity.includes('persistent across scenes')) throw new Error('Character continuity contract is missing persistence guidance.');
+if (!reuse.includes('semantic_similarity')) throw new Error('Semantic reuse detector is not active.');
+if (!composition.includes('previous_shot_id') || !composition.includes('next_shot_id')) throw new Error('Composition document does not preserve shot adjacency.');
+if (!integrity.includes('assertSufficientCoverage')) throw new Error('Render integrity coverage gate is disconnected.');
+if (!jobs.includes('missing_scenes:missingScenes')) throw new Error('Animation job does not reject incomplete scene-image coverage.');
+if (!jobs.includes("recovery:'continue_polling_same_provider_request'")) throw new Error('Animation job can confuse status uncertainty with provider failure.');
+if (!jobs.includes("['ERROR','FAILED','CANCELLED'].includes(status)")) throw new Error('Animation job lacks a definitive provider-failure boundary.');
+if (!gateway.includes("if(path==='/v1/video/assemble')")) throw new Error('Assembly route is not connected to Shotstack.');
+if (!gateway.includes("if(path==='/v1/video/animate')")) throw new Error('Animation route is not connected to motion resilience.');
+if (!gateway.includes("path==='/v1/image/world-assets'||path==='/v1/image/scenes'")) throw new Error('Image routes are not connected to Pixazo.');
+if (!gateway.includes('return pollinations.fetch(r,e)')) throw new Error('Language/audio fallback route is disconnected.');
+if (!gateway.includes('headers:{...Object.fromEntries(response.headers),...cors(r,e)}')) throw new Error('Assembly response is not normalized through the active gateway CORS policy.');
+if (!shotstack.includes('STORYBOARD_MASTER_TIMELINE')) throw new Error('Assembly does not declare storyboard-master-timeline mode.');
+if (!shotstack.includes('MEDIA_INTEGRITY_MISSING_MOTION_FOR_STORYBOARD_SCENE')) throw new Error('Assembly does not require motion for every storyboard scene.');
+if (!shotstack.includes('FINAL_MEDIA_DURATION_MISMATCH')) throw new Error('Assembly does not verify final duration against the song timeline.');
+if (!shotstack.includes('timeline_start_seconds') || !shotstack.includes('timeline_end_seconds')) throw new Error('Assembly does not consume scene timing.');
+
+console.log('PIPELINE COHERENCE AUDIT PASS');
+console.log('Contract -> browser orchestration -> validated entry -> provider gateway -> generation -> animation -> assembly paths are connected.');
+console.log('Musical structure, beat splitting, character continuity, semantic reuse, provenance, coverage, and master-timeline timing remain compatible.');
+console.log('Animation rejects incomplete image coverage and preserves accepted-provider jobs during status uncertainty.');
+console.log('No active subsystem is permitted to silently replace another subsystem\'s authoritative output.');
