@@ -30,6 +30,7 @@ jobs:
           node --check log-guard.js
           node --check motion-bridge.js
           node --check tests/static-audit.mjs
+          node --check tests/pipeline-coherence-audit.mjs
           node --check tests/render-integrity.mjs
           node --check tests/live-smoke.mjs
           node --check tests/security-audit.mjs
@@ -46,10 +47,19 @@ jobs:
       - name: Semantic visual reuse regression tests
         run: node --experimental-strip-types --test worker/src/visual-reuse-detector.test.ts
 
+      - name: Musical structure regression tests
+        run: node --experimental-strip-types --test worker/src/musical-structure.test.ts
+
+      - name: Scene splitting and continuity regression tests
+        run: node --experimental-strip-types --test worker/src/scene-splitting.test.ts worker/src/character-continuity.test.ts
+
       - name: Worker bundle/type-surface checks
         run: |
           npx --yes esbuild worker/src/arena-validated-entry.ts --bundle --format=esm --platform=neutral --outfile=/tmp/beatvision-arena-worker.mjs
           npx --yes esbuild worker/src/index.ts --bundle --format=esm --platform=neutral --outfile=/tmp/beatvision-arena-index.mjs
+
+      - name: Cross-system pipeline coherence audit
+        run: node tests/pipeline-coherence-audit.mjs
 
       - name: Static architecture audit
         run: node tests/static-audit.mjs
