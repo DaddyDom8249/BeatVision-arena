@@ -32,6 +32,17 @@ if (!animation.includes('status_retries:0')) {
   throw new Error('New animation jobs must initialize status retry tracking.');
 }
 
+if (!animation.includes('const imageScenes=new Set(images.map((image:any,index:number)=>sceneNo(image,index)))')) {
+  throw new Error('Animation submission must validate scene-image coverage.');
+}
+if (!animation.includes("error:'Animation job requires a generated image for every storyboard scene.'")) {
+  throw new Error('Incomplete scene-image coverage must block animation submission.');
+}
+if (!animation.includes('missing_scenes:missingScenes')) {
+  throw new Error('Animation coverage rejection must identify missing scenes.');
+}
+
 console.log('ANIMATION STATE AUDIT PASS');
 console.log('Accepted provider jobs: status ambiguity preserves the same provider request.');
 console.log('Fallback: only definitive provider failure can trigger fallback.');
+console.log('Animation input: every storyboard scene must have a generated image before submission.');
