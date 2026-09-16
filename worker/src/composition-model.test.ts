@@ -38,10 +38,36 @@ test('reuse detector catches exact asset reuse and allows explicit motif returns
   assert.throws(() => assertNoUnapprovedReuse(shots), /UNAPPROVED_VISUAL_REUSE/);
 });
 
-test('semantic reuse is detected without a paid vision service', () => {
+test('semantic reuse is detected from storyboard visual-beat fields', () => {
+  const shots = [
+    {
+      id: 'beat-a',
+      lyricMeaning: 'alone in the dark', narrativePurpose: 'isolation', emotionalState: 'grief',
+      characterState: 'withdrawn', environment: 'industrial hallway', action: 'walking',
+      visualConcept: 'hooded figure walking through a blue industrial hallway', cameraIntent: 'slow push-in',
+      symbolicElements: ['shadow']
+    },
+    {
+      id: 'beat-b',
+      lyricMeaning: 'alone in the dark', narrativePurpose: 'isolation', emotionalState: 'grief',
+      characterState: 'withdrawn', environment: 'industrial hallway', action: 'walking',
+      visualConcept: 'hooded figure walking through a blue industrial hallway', cameraIntent: 'slow push-in',
+      symbolicElements: ['shadow']
+    }
+  ];
+  const findings = detectVisualReuse(shots);
+  assert.ok(findings.some(x => x.reason === 'semantic_similarity' && x.score === 1 && !x.intentional));
+  assert.throws(() => assertNoUnapprovedReuse(shots), /UNAPPROVED_VISUAL_REUSE/);
+});
+
+test('semantic reuse allows an explicitly intentional motif return', () => {
   const findings = detectVisualReuse([
-    { id: 'a', asset_id: 'a', semantic_fingerprint: ['hooded', 'blue', 'industrial', 'hallway'] },
-    { id: 'b', asset_id: 'b', semantic_fingerprint: ['hooded', 'blue', 'industrial', 'hallway'] },
+    { id: 'beat-a', visualConcept: 'hooded figure in industrial hallway', reusePolicy: 'new_visual_event' },
+    { id: 'beat-b', visualConcept: 'hooded figure in industrial hallway', reusePolicy: 'intentional_motif_return' }
   ]);
-  assert.ok(findings.some(x => x.reason === 'semantic_similarity' && x.score === 1));
+  assert.ok(findings.some(x => x.reason === 'semantic_similarity' && x.intentional));
+  assert.doesNotThrow(() => assertNoUnapprovedReuse([
+    { id: 'beat-a', visualConcept: 'hooded figure in industrial hallway', reusePolicy: 'new_visual_event' },
+    { id: 'beat-b', visualConcept: 'hooded figure in industrial hallway', reusePolicy: 'intentional_motif_return' }
+  ]));
 });
