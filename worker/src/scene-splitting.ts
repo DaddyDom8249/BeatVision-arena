@@ -37,6 +37,21 @@ function nearestBeat(target: number, candidates: number[]): number | null {
   return best;
 }
 
+function stableHash(value: string): string {
+  let hash = 2166136261 >>> 0;
+  for (let i = 0; i < value.length; i += 1) hash = Math.imul(hash ^ value.charCodeAt(i), 16777619);
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+export function characterContinuityAnchor(scene: any): string | null {
+  const explicit = scene?.characterContinuityId ?? scene?.character_continuity_id ?? scene?.characterId ?? scene?.character_id;
+  if (String(explicit ?? '').trim()) return `character:${String(explicit).trim()}`;
+  const identity = scene?.characterIdentity ?? scene?.character_identity ?? scene?.characterDescription ?? scene?.character_description ?? scene?.characterState ?? scene?.character_state;
+  const normalized = typeof identity === 'string' ? identity.trim() : JSON.stringify(identity ?? '');
+  if (!normalized) return null;
+  return `character:${stableHash(normalized.toLowerCase())}`;
+}
+
 export function beatSnappedBoundaries(start: number, end: number, parts: number, audioAnalysis?: BeatTimeSource | null): number[] {
   const duration = Math.max(0.1, end - start);
   if (parts <= 1) return [start, end];
@@ -67,6 +82,7 @@ export function splitLongBeats(storyboard: any, audioAnalysis?: BeatTimeSource |
     const duration = Math.max(.1, end - start);
     const parts = Math.max(1, Math.ceil(duration / 5));
     const boundaries = beatSnappedBoundaries(start, end, parts, audioAnalysis);
+    const continuityAnchor = characterContinuityAnchor(original);
     for (let part = 0; part < parts; part += 1) {
       const a = boundaries[part];
       const b = boundaries[part + 1];
@@ -79,6 +95,7 @@ export function splitLongBeats(storyboard: any, audioAnalysis?: BeatTimeSource |
         duration_seconds: b - a,
         visual_variation_part: `${part + 1}/${parts}`,
         visual_variation_parent: original?.beatId || original?.beat_id || original?.scene || null,
+        character_continuity_anchor: continuityAnchor,
         reusePolicy: part === 0 ? (original?.reusePolicy || original?.reuse_policy || 'new_visual_event') : 'new_visual_event'
       });
     }
