@@ -1,4 +1,5 @@
 import pixazo from './video-fallback-gateway';
+import { compileMusicalContext } from './musical-structure';
 export { BeatVisionAnimationJob } from './animation-jobs';
 
 const BASE = 'https://gateway.pixazo.ai';
@@ -28,7 +29,8 @@ const scenePrompt = (payload: any, scene: any, index: number, total: number) => 
   const motifs = clip(JSON.stringify(world?.visual_motifs || []), 900);
   const continuity = clip(JSON.stringify(world?.continuity_rules || []), 700);
   const style = clip(payload?.style, 600);
-  const composition = ['wide environmental establishing composition with the character small in frame', 'medium character-focused composition with visible interaction with the environment', 'tight emotional close-up emphasizing face, hands, or a meaningful object', 'side/profile composition with strong negative space and directional movement', 'low-angle composition making the environment feel imposing around the character', 'high-angle or elevated composition revealing spatial relationships', 'silhouette/backlit composition using the established world lighting and atmosphere', 'reflection/foreground-obstruction composition using glass, mirrors, rain, architecture, or another established motif'];
+  const musical = compileMusicalContext(payload?.audio_analysis || payload?.audioAnalysis || payload?.audio || payload?.analysis, scene);
+  const composition = ['wide environmental establishing composition with the character small in frame', 'medium character-focused composition with visible interaction with the environment', 'tight emotional close-up emphasizing face, hands, or a meaningful object', 'side/profile composition with strong negative space and directional movement', 'low-angle composition making the environment feel imposing around the character', 'high-angle composition revealing spatial relationships', 'silhouette/backlit composition using the established world lighting and atmosphere', 'reflection/foreground-obstruction composition using glass, mirrors, rain, architecture, or another established motif'];
   const action = ['walking or changing position through the established location', 'interacting with a meaningful object or environmental element', 'pausing and reacting physically to an internal realization', 'turning, looking, or tracking something outside the frame', 'moving from one spatial zone to another', 'performing a restrained physical gesture that expresses the beat emotion', 'observing the environment while the environment provides the visual event', 'creating a visible consequence of the previous beat'];
   const camera = ['slow lateral tracking move', 'slow push-in', 'slow pull-back revealing context', 'controlled handheld follow', 'arc around the subject', 'vertical reveal or tilt', 'locked-off composition with environmental motion', 'foreground-to-background rack-focus style reveal'];
   const lighting = ['rainy diffuse backlight', 'hard side light through architecture', 'practical interior light against deep shadow', 'cool reflected city light', 'strong silhouette against atmospheric haze', 'isolated pool of light surrounded by darkness', 'wet reflective surfaces catching sparse highlights', 'mixed warm interior and cold exterior light'];
@@ -46,6 +48,7 @@ const scenePrompt = (payload: any, scene: any, index: number, total: number) => 
     motifs ? `Visual motifs: ${motifs}` : '',
     continuity ? `Continuity rules: ${continuity}` : '',
     `Storyboard scene ${index + 1}/${total}: ${clip(JSON.stringify(scene), 1800)}`,
+    musical ? `MUSICAL STRUCTURE:\n${musical}` : '',
     'VISUAL DIVERSITY DIRECTIVE:',
     `Composition: ${pick(composition, 0)}.`,
     `Primary action: ${pick(action, 1)}.`,
@@ -54,6 +57,7 @@ const scenePrompt = (payload: any, scene: any, index: number, total: number) => 
     `Previous beat: ${scene?.previousBeat || scene?.previous_beat || 'none'}. Next beat: ${scene?.nextBeat || scene?.next_beat || 'none'}.`,
     'Generate a genuinely new visual event, not a reordered, recolored, or reframed copy of another beat.',
     'Preserve established character identity, world rules, locations, motifs, emotional truth, and original concept.',
+    'Use the musical structure as a timing cue. The scene should visually respond to the local beat, section, energy, or onset when supplied.',
     'Do not duplicate the previous beat composition, pose, framing, camera angle, or primary action unless reusePolicy is intentional_motif_return.',
     'Do not create a generic portrait merely because the character is present. The environment and action must contribute to the story.',
     'For repeated lyrics, change the visual event, consequence, composition, or emotional state. Reuse a motif only when narratively intentional.'
