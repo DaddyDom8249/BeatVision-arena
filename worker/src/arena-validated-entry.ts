@@ -1,4 +1,5 @@
 import arena from './arena-entry';
+import providerGateway from './video-fallback-gateway';
 import { BeatVisionAnimationJob } from './animation-jobs';
 export { BeatVisionAnimationJob } from './animation-jobs';
 import { validateStoryboard } from './storyboard-validator';
@@ -25,6 +26,13 @@ export default {
     }
     if (path !== '/' && path !== '/health' && r.headers.get('Authorization') !== `Bearer ${token}`) {
       return json(r, { ok: false, error: 'Unauthorized' }, 401);
+    }
+
+    // Persistent animation status is a GET with no JSON body. Route the job
+    // endpoint before the generic POST/body validation in arena-entry so the
+    // poll request cannot be rejected as an empty/invalid JSON request.
+    if (path.startsWith('/v1/video/animate/jobs/')) {
+      return providerGateway.fetch(r, env);
     }
 
     if (r.method === 'POST') {
