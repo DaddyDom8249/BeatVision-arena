@@ -4,6 +4,9 @@ export type BeatTimeSource = {
   beats?: unknown;
   beat_grid?: unknown;
   beatGrid?: unknown;
+  bpm?: unknown;
+  BPM?: unknown;
+  tempo?: unknown;
 };
 
 function finite(value: unknown): number | null {
@@ -11,16 +14,24 @@ function finite(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function beatTimes(source: BeatTimeSource): number[] {
+function beatTimes(source: BeatTimeSource, start = 0, end = 0): number[] {
   const raw = source?.beat_times ?? source?.beatTimes ?? source?.beats ?? source?.beat_grid ?? source?.beatGrid;
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .map((value: any) => {
-      if (typeof value === 'object' && value !== null) return finite(value.time ?? value.startTime ?? value.start_time);
-      return finite(value);
-    })
-    .filter((value): value is number => value !== null && value >= 0)
-    .sort((a, b) => a - b);
+  if (Array.isArray(raw)) {
+    return raw
+      .map((value: any) => {
+        if (typeof value === 'object' && value !== null) return finite(value.time ?? value.startTime ?? value.start_time);
+        return finite(value);
+      })
+      .filter((value): value is number => value !== null && value >= 0)
+      .sort((a, b) => a - b);
+  }
+  const bpm = finite(source?.bpm ?? source?.BPM ?? source?.tempo);
+  if (!(bpm && bpm > 0 && bpm <= 300) || !(end > start)) return [];
+  const interval = 60 / bpm;
+  const first = Math.max(0, Math.floor(start / interval) * interval);
+  const generated: number[] = [];
+  for (let time = first; time <= end + 1e-9; time += interval) generated.push(Number(time.toFixed(9)));
+  return generated;
 }
 
 function nearestBeat(target: number, candidates: number[]): number | null {
@@ -55,10 +66,8 @@ export function characterContinuityAnchor(scene: any): string | null {
 export function beatSnappedBoundaries(start: number, end: number, parts: number, audioAnalysis?: BeatTimeSource | null): number[] {
   const duration = Math.max(0.1, end - start);
   if (parts <= 1) return [start, end];
-  const beats = beatTimes(audioAnalysis || {});
-  if (!beats.length) {
-    return Array.from({ length: parts + 1 }, (_, index) => start + duration * index / parts);
-  }
+  const beats = beatTimes(audioAnalysis || {}, start, end);
+  if (!beats.length) return Array.from({ length: parts + 1 }, (_, index) => start + duration * index / parts);
 
   const boundaries = [start];
   for (let part = 1; part < parts; part += 1) {
