@@ -7,6 +7,11 @@ test('snaps long-scene boundaries to the nearest available beat', () => {
   assert.deepEqual(boundaries, [0, 5.2, 10]);
 });
 
+test('derives a deterministic beat grid from BPM when beat times are unavailable', () => {
+  const boundaries = beatSnappedBoundaries(0, 10, 2, { bpm: 120 });
+  assert.deepEqual(boundaries, [0, 5, 10]);
+});
+
 test('preserves deterministic equal splits when beat analysis is unavailable', () => {
   const boundaries = beatSnappedBoundaries(2, 12, 2, {});
   assert.deepEqual(boundaries, [2, 7, 12]);
