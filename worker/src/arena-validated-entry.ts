@@ -3,6 +3,7 @@ import { BeatVisionAnimationJob } from './animation-jobs';
 export { BeatVisionAnimationJob } from './animation-jobs';
 import { validateStoryboard } from './storyboard-validator';
 import { timelineGuardian, validateMediaRecord } from './skills';
+import { detectVisualReuse } from './visual-reuse-detector';
 
 const json = (r: Request, data: unknown, status = 200) => new Response(JSON.stringify(data, null, 2), {
   status,
@@ -38,7 +39,15 @@ export default {
         const validation = validateStoryboard(storyboard, target > 0 ? target : undefined, partial);
         const timeline = timelineGuardian(storyboard, partial ? undefined : (target > 0 ? target : undefined));
         const timelineIssues = partial ? [] : timeline.issues.map((message: string) => ({ code: 'TIMELINE_GUARDIAN', severity: 'error' as const, message }));
-        const issues = [...validation.issues, ...timelineIssues];
+        const scenes = Array.isArray(storyboard?.scenes) ? storyboard.scenes : Array.isArray(storyboard?.visual_beats) ? storyboard.visual_beats : [];
+        const reuseIssues = partial ? [] : detectVisualReuse(scenes)
+          .filter(finding => !finding.intentional && finding.reason === 'semantic_similarity')
+          .map(finding => ({
+            code: 'VISUAL_REUSE',
+            severity: 'error' as const,
+            message: `Unapproved semantic visual reuse: ${finding.shot_id} resembles ${finding.compared_to} (${finding.score}).`
+          }));
+        const issues = [...validation.issues, ...timelineIssues, ...reuseIssues];
         if (issues.some(issue => issue.severity === 'error')) {
           return json(r, { ok: false, contract_version: body?.contract_version || '1.1', status: 'storyboard_integrity_rejected', error: 'Storyboard failed deterministic integrity validation.', issues }, 422);
         }
