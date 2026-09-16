@@ -10,12 +10,13 @@ const CONTRACT = '1.1';
 const cors = (r: Request, e: any) => {
   const origin = r.headers.get('Origin') || '';
   const allowed = String(e.ALLOWED_ORIGIN || '').split(',').map((x: string) => x.trim()).filter(Boolean);
-  return {
-    'Access-Control-Allow-Origin': origin && (!allowed.length || allowed.includes(origin)) ? origin : (allowed[0] || '*'),
+  const headers: Record<string, string> = {
     'Vary': 'Origin',
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type,X-BeatVision-Contract,Authorization,X-BeatVision-Request'
   };
+  if (origin && allowed.includes(origin)) headers['Access-Control-Allow-Origin'] = origin;
+  return headers;
 };
 
 const json = (r: Request, e: any, data: unknown, status = 200) =>
@@ -112,11 +113,17 @@ async function storyboardWithRenderSafeBeats(r: Request, e: any, body: any) {
 }
 
 export default { async fetch(r: Request, e: any) {
-  if (r.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(r, e) });
+  if (r.method === 'OPTIONS') {
+    const origin = r.headers.get('Origin') || '';
+    const allowed = String(e.ALLOWED_ORIGIN || '').split(',').map((x: string) => x.trim()).filter(Boolean);
+    if (!origin || !allowed.includes(origin)) return new Response(null, { status: 403, headers: cors(r, e) });
+    return new Response(null, { status: 204, headers: cors(r, e) });
+  }
   const url = new URL(r.url), path = url.pathname, requestId = r.headers.get('X-BeatVision-Request') || crypto.randomUUID();
   if (path === '/' || path === '/health') return pixazo.fetch(r, e);
-  if (e.GATEWAY_TOKEN && r.headers.get('Authorization') !== `Bearer ${e.GATEWAY_TOKEN}`) return json(r, e, { ok: false, error: 'Unauthorized', request_id: requestId }, 401);
-  let body: any; try { body = await r.clone().json(); } catch { return pixazo.fetch(r, e); }
+  if (!e.GATEWAY_TOKEN) return json(r, e, { ok: false, error: 'Gateway authentication is not configured.', request_id: requestId }, 503);
+  if (r.headers.get('Authorization') !== `Bearer ${e.GATEWAY_TOKEN}`) return json(r, e, { ok: false, error: 'Unauthorized', request_id: requestId }, 401);
+  let body: any; try { body = await r.clone().json(); } catch { return json(r, e, { ok: false, error: 'Invalid JSON request body.', request_id: requestId }, 400); }
   if (body?.operation === 'sceneImages') return resilientSceneImages(r, e, body, requestId);
   if (body?.operation === 'storyboard') return storyboardWithRenderSafeBeats(r, e, body);
   return pixazo.fetch(r, e);
