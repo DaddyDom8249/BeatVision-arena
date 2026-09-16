@@ -27,6 +27,22 @@ function hashDistance(a: string, b: string): number | null {
   return distance;
 }
 
+function semanticFingerprint(shot: any): string {
+  const explicit = Array.isArray(shot?.semantic_fingerprint) ? shot.semantic_fingerprint.join(' ') : shot?.semantic_fingerprint;
+  if (String(explicit ?? '').trim()) return String(explicit);
+  return [
+    shot?.lyricMeaning ?? shot?.lyric_meaning,
+    shot?.narrativePurpose ?? shot?.narrative_purpose,
+    shot?.emotionalState ?? shot?.emotional_state,
+    shot?.characterState ?? shot?.character_state,
+    shot?.environment,
+    shot?.action,
+    shot?.visualConcept ?? shot?.visual_concept,
+    shot?.cameraIntent ?? shot?.camera_intent,
+    Array.isArray(shot?.symbolicElements) ? shot.symbolicElements.join(' ') : shot?.symbolic_elements,
+  ].filter(Boolean).join(' ');
+}
+
 export function detectVisualReuse(shots: any[], threshold = 0.82): ReuseCandidate[] {
   const findings: ReuseCandidate[] = [];
   const ordered = Array.isArray(shots) ? shots : [];
@@ -49,9 +65,7 @@ export function detectVisualReuse(shots: any[], threshold = 0.82): ReuseCandidat
         const score = bits ? 1 - distance / bits : 0;
         if (score >= 0.90) findings.push({ shot_id: String(current.id ?? current.beatId ?? i), compared_to: String(previous.id ?? previous.beatId ?? j), reason: 'perceptual_hash', score: Number(score.toFixed(3)), intentional });
       }
-      const currentFingerprint = Array.isArray(current?.semantic_fingerprint) ? current.semantic_fingerprint.join(' ') : current?.semantic_fingerprint;
-      const previousFingerprint = Array.isArray(previous?.semantic_fingerprint) ? previous.semantic_fingerprint.join(' ') : previous?.semantic_fingerprint;
-      const semanticScore = jaccard(tokens(currentFingerprint), tokens(previousFingerprint));
+      const semanticScore = jaccard(tokens(semanticFingerprint(current)), tokens(semanticFingerprint(previous)));
       if (semanticScore >= threshold) findings.push({ shot_id: String(current.id ?? current.beatId ?? i), compared_to: String(previous.id ?? previous.beatId ?? j), reason: 'semantic_similarity', score: Number(semanticScore.toFixed(3)), intentional });
     }
   }
