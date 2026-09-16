@@ -51,7 +51,7 @@ const statePath = path.join(OUT, 'state.json');
 const eventsPath = path.join(OUT, 'events.jsonl');
 const finalReportPath = path.join(OUT, 'final-report.json');
 let state = fs.existsSync(statePath) ? JSON.parse(fs.readFileSync(statePath, 'utf8')) : {
-  version: 1,
+  version: 2,
   started_at: new Date().toISOString(),
   gateway: GATEWAY,
   contract_version: CONTRACT,
@@ -98,6 +98,50 @@ function audioDataUrl() {
   const mime = ({'.mp3':'audio/mpeg','.wav':'audio/wav','.m4a':'audio/mp4','.aac':'audio/aac','.flac':'audio/flac'})[ext] || 'audio/mpeg';
   const buf = fs.readFileSync(AUDIO);
   return { data: `data:${mime};base64,${buf.toString('base64')}`, mime, name: path.basename(AUDIO), size: stat.size, sha256: sha256File(AUDIO) };
+}
+function inputFingerprint(audio) {
+  return crypto.createHash('sha256').update(JSON.stringify({
+    gateway: GATEWAY,
+    contract_version: CONTRACT,
+    song_title: songTitle,
+    style,
+    lyrics: readLyrics(),
+    lyrics_file: lyricsFile,
+    audio_sha256: audio.sha256,
+    audio_size_bytes: audio.size,
+    audio_mime_type: audio.mime,
+    audio_filename: audio.name
+  })).digest('hex');
+}
+function establishInputFingerprint(audio) {
+  const fingerprint = inputFingerprint(audio);
+  if (state.input_fingerprint) {
+    if (state.input_fingerprint !== fingerprint) {
+      throw new Error(`Input fingerprint mismatch for ${OUT}. Refusing to resume state created for different project inputs.`);
+    }
+    return fingerprint;
+  }
+  const priorAudioInfoPath = path.join(OUT, 'audio', 'info.json');
+  const priorInputPath = path.join(OUT, 'audio', 'input.json');
+  let priorAudio = null;
+  let priorInput = null;
+  try { if (fs.existsSync(priorAudioInfoPath)) priorAudio = JSON.parse(fs.readFileSync(priorAudioInfoPath, 'utf8')); } catch {}
+  try { if (fs.existsSync(priorInputPath)) priorInput = JSON.parse(fs.readFileSync(priorInputPath, 'utf8')); } catch {}
+  if (state.animation?.job_id || Object.values(state.stages || {}).some(x => x?.complete)) {
+    const sameKnownInputs = priorAudio?.sha256 === audio.sha256 && priorAudio?.bytes === audio.size && priorInput?.song_title === songTitle && priorInput?.style === style && priorInput?.lyrics === readLyrics() && state.gateway === GATEWAY && state.contract_version === CONTRACT;
+    if (!sameKnownInputs) {
+      throw new Error(`Legacy state in ${OUT} has no trusted input fingerprint. Refusing unsafe resume. Use a new BEATVISION_OUTPUT directory for a fresh run.`);
+    }
+    state.input_fingerprint = fingerprint;
+    state.fingerprint_migrated_at = new Date().toISOString();
+    saveState();
+    event('input_fingerprint_migrated', { fingerprint });
+    return fingerprint;
+  }
+  state.input_fingerprint = fingerprint;
+  saveState();
+  event('input_fingerprint_created', { fingerprint });
+  return fingerprint;
 }
 async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function headers(token = TOKEN) {
@@ -291,8 +335,9 @@ async function main() {
   console.log('');
 
   const audio = audioDataUrl();
+  establishInputFingerprint(audio);
   saveJson('audio/info.json', { file: AUDIO, name: audio.name, mime: audio.mime, bytes: audio.size, sha256: audio.sha256, browser_equivalent_limit: MAX_AUDIO_BYTES });
-  event('run_start', { gateway: GATEWAY, audio: AUDIO, song_title: songTitle, style, contract_version: CONTRACT, resumed: !!state.animation.job_id });
+  event('run_start', { gateway: GATEWAY, audio: AUDIO, song_title: songTitle, style, contract_version: CONTRACT, input_fingerprint: state.input_fingerprint, resumed: !!state.animation.job_id });
 
   const health = await gatewayGet('/health', 'health');
   saveJson('gateway/health.json', health);
@@ -313,7 +358,7 @@ async function main() {
   const probe = probeMedia(finalFile);
 
   state.complete = true; state.completed_at = new Date().toISOString(); state.final = { assembled, final_file: finalFile, probe }; saveState();
-  const report = { ok: true, completed_at: state.completed_at, gateway: GATEWAY, contract_version: CONTRACT, song_title: songTitle, style, audio: { file: AUDIO, bytes: audio.size, sha256: audio.sha256 }, stages: Object.fromEntries(Object.entries(state.stages).map(([k,v]) => [k, { complete: v.complete, operation: v.operation, status: v.meta?.status }])), animation: { job_id: state.animation.job_id, post_count: state.animation.post_count, final_status: state.animation.status, scene_count: motion.scene_count, failed_scene_count: motion.failed_scenes.length }, assembly: assembled, final_file: finalFile, final_media_probe: probe };
+  const report = { ok: true, completed_at: state.completed_at, gateway: GATEWAY, contract_version: CONTRACT, input_fingerprint: state.input_fingerprint, song_title: songTitle, style, audio: { file: AUDIO, bytes: audio.size, sha256: audio.sha256 }, stages: Object.fromEntries(Object.entries(state.stages).map(([k,v]) => [k, { complete: v.complete, operation: v.operation, status: v.meta?.status }])), animation: { job_id: state.animation.job_id, post_count: state.animation.post_count, final_status: state.animation.status, scene_count: motion.scene_count, failed_scene_count: motion.failed_scenes.length }, assembly: assembled, final_file: finalFile, final_media_probe: probe };
   saveJson('final-report.json', report);
   event('run_complete', { ok: true, final_file: finalFile, animation_post_count: state.animation.post_count });
   console.log('\n==========================================');
@@ -324,7 +369,7 @@ async function main() {
   console.log(`Animation POST count: ${state.animation.post_count}`);
 }
 main().catch(error => {
-  state.failed = { at: new Date().toISOString(), status: error.status || 0, error: error.message, animation_post_count: state.animation.post_count, animation_job_id: state.animation.job_id };
+  state.failed = { at: new Date().toISOString(), status: error.status || 0, error: error.message, animation_post_count: state.animation.post_count, animation_job_id: state.animation.job_id, input_fingerprint: state.input_fingerprint || null };
   saveState();
   saveJson('final-report.json', { ok: false, error: state.failed, state });
   event('run_failed', state.failed);
