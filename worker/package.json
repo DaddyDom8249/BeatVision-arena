@@ -5,6 +5,7 @@
   "scripts": {
     "test:storyboard": "node --experimental-strip-types --test src/storyboard-validator.test.ts",
     "test:render-integrity": "node --experimental-strip-types --test src/render-integrity.test.ts",
-    "test": "npm run test:storyboard && npm run test:render-integrity"
+    "test:composition": "node --experimental-strip-types --test src/composition-model.test.ts",
+    "test": "npm run test:storyboard && npm run test:render-integrity && npm run test:composition"
   }
 }
