@@ -6,6 +6,8 @@ export { BeatVisionAnimationJob } from './animation-jobs';
 
 const BASE = 'https://gateway.pixazo.ai';
 const CONTRACT = '1.1';
+const LANGUAGE_FALLBACK_MODEL = 'openai-fast';
+const LANGUAGE_TIMEOUT_MS = 60000;
 
 const cors = (r: Request, e: any) => {
   const origin = r.headers.get('Origin') || '';
@@ -24,6 +26,15 @@ const json = (r: Request, e: any, data: unknown, status = 200) =>
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const clip = (value: unknown, max: number) => String(value ?? '').slice(0, max);
 const media = (d: any) => d?.output?.media_url?.[0] || d?.output?.media_url || d?.output || d?.imageUrl || d?.image_url || d?.url || null;
+const parseJson = (text: string) => {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced?.[1]?.trim() || text.trim();
+  try { return JSON.parse(candidate); } catch {
+    const object = candidate.match(/\{[\s\S]*\}/)?.[0];
+    const array = candidate.match(/\[[\s\S]*\]/)?.[0];
+    try { return JSON.parse(object || array || candidate); } catch { return { raw: candidate }; }
+  }
+};
 
 const scenePrompt = (payload: any, scene: any, index: number, total: number) => {
   const world = payload?.world || {};
@@ -42,31 +53,7 @@ const scenePrompt = (payload: any, scene: any, index: number, total: number) => 
   const seed = String(scene?.beatId || scene?.beat_id || scene?.scene || index + 1);
   for (let i = 0; i < seed.length; i += 1) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
   const pick = <T>(items: T[], offset: number) => items[((h >>> 0) + offset) % items.length];
-  return clip([
-    'BeatVision cinematic music-video scene still.',
-    'Dark industrial realism, cinematic lighting, coherent recurring character and environment.',
-    'No text, logos, watermarks, captions, UI or typography.',
-    style ? `Style: ${style}` : '',
-    character ? `Character continuity: ${character}` : '',
-    locations ? `World locations: ${locations}` : '',
-    motifs ? `Visual motifs: ${motifs}` : '',
-    continuity ? `Continuity rules: ${continuity}` : '',
-    characterContinuity,
-    `Storyboard scene ${index + 1}/${total}: ${clip(JSON.stringify(scene), 1800)}`,
-    musical ? `MUSICAL STRUCTURE:\n${musical}` : '',
-    'VISUAL DIVERSITY DIRECTIVE:',
-    `Composition: ${pick(composition, 0)}.`,
-    `Primary action: ${pick(action, 1)}.`,
-    `Camera language: ${pick(camera, 2)}.`,
-    `Lighting treatment: ${pick(lighting, 3)}.`,
-    `Previous beat: ${scene?.previousBeat || scene?.previous_beat || 'none'}. Next beat: ${scene?.nextBeat || scene?.next_beat || 'none'}.`,
-    'Generate a genuinely new visual event, not a reordered, recolored, or reframed copy of another beat.',
-    'Preserve established character identity, world rules, locations, motifs, emotional truth, and original concept.',
-    'Use the musical structure as a timing cue. The scene should visually respond to the local beat, section, energy, or onset when supplied.',
-    'Do not duplicate the previous beat composition, pose, framing, camera angle, or primary action unless reusePolicy is intentional_motif_return.',
-    'Do not create a generic portrait merely because the character is present. The environment and action must contribute to the story.',
-    'For repeated lyrics, change the visual event, consequence, composition, or emotional state. Reuse a motif only when narratively intentional.'
-  ].filter(Boolean).join('\n'), 12000);
+  return clip(['BeatVision cinematic music-video scene still.','Dark industrial realism, cinematic lighting, coherent recurring character and environment.','No text, logos, watermarks, captions, UI or typography.',style ? `Style: ${style}` : '',character ? `Character continuity: ${character}` : '',locations ? `World locations: ${locations}` : '',motifs ? `Visual motifs: ${motifs}` : '',continuity ? `Continuity rules: ${continuity}` : '',characterContinuity,`Storyboard scene ${index + 1}/${total}: ${clip(JSON.stringify(scene), 1800)}`,musical ? `MUSICAL STRUCTURE:\n${musical}` : '','VISUAL DIVERSITY DIRECTIVE:',`Composition: ${pick(composition, 0)}.`,`Primary action: ${pick(action, 1)}.`,`Camera language: ${pick(camera, 2)}.`,`Lighting treatment: ${pick(lighting, 3)}.`,`Previous beat: ${scene?.previousBeat || scene?.previous_beat || 'none'}. Next beat: ${scene?.nextBeat || scene?.next_beat || 'none'}.`,'Generate a genuinely new visual event, not a reordered, recolored, or reframed copy of another beat.','Preserve established character identity, world rules, locations, motifs, emotional truth, and original concept.','Use the musical structure as a timing cue.','Do not duplicate the previous beat composition, pose, framing, camera angle, or primary action unless reusePolicy is intentional_motif_return.','Do not create a generic portrait merely because the character is present.','For repeated lyrics, change the visual event, consequence, composition, or emotional state.'].filter(Boolean).join('\n'), 12000);
 };
 
 async function pixazoPost(path: string, key: string, body: any) {
@@ -77,16 +64,8 @@ async function pixazoPost(path: string, key: string, body: any) {
 }
 async function generateSceneImage(key: string, prompt: string, sceneNumber: number) {
   let lastError = '';
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    try {
-      const data = await pixazoPost('/getImage/v1/getSDXLImage', key, { prompt, negative_prompt: 'low quality, blurry, distorted anatomy, duplicate face, extra limbs, text, logo, watermark, UI, caption, repeated composition, duplicate shot', height: 576, width: 1024, num_steps: 20, guidance: 5, seed: Math.floor(Math.random() * 2147483647) });
-      const url = media(data); if (!url) throw new Error('SDXL completed without an image URL.'); return { image_url: url, model: 'sdxl' };
-    } catch (error) { lastError = error instanceof Error ? error.message : String(error); if (attempt < 3) await sleep(1500 * attempt); }
-  }
-  try {
-    const data = await pixazoPost('/flux-1-schnell/v1/getData', key, { prompt: clip(prompt, 2048), num_steps: 4, height: 576, width: 1024, seed: Math.floor(Math.random() * 2147483647) });
-    const url = media(data); if (!url) throw new Error('Flux Schnell completed without an image URL.'); return { image_url: url, model: 'flux-1-schnell', fallback_reason: lastError };
-  } catch (error) { const fluxError = error instanceof Error ? error.message : String(error); throw new Error(`scene ${sceneNumber}: SDXL failed after 3 attempts; Flux Schnell fallback also failed. SDXL=${lastError}; Flux=${fluxError}`); }
+  for (let attempt = 1; attempt <= 3; attempt += 1) { try { const data = await pixazoPost('/getImage/v1/getSDXLImage', key, { prompt, negative_prompt: 'low quality, blurry, distorted anatomy, duplicate face, extra limbs, text, logo, watermark, UI, caption, repeated composition, duplicate shot', height: 576, width: 1024, num_steps: 20, guidance: 5, seed: Math.floor(Math.random() * 2147483647) }); const url = media(data); if (!url) throw new Error('SDXL completed without an image URL.'); return { image_url: url, model: 'sdxl' }; } catch (error) { lastError = error instanceof Error ? error.message : String(error); if (attempt < 3) await sleep(1500 * attempt); } }
+  try { const data = await pixazoPost('/flux-1-schnell/v1/getData', key, { prompt: clip(prompt, 2048), num_steps: 4, height: 576, width: 1024, seed: Math.floor(Math.random() * 2147483647) }); const url = media(data); if (!url) throw new Error('Flux Schnell completed without an image URL.'); return { image_url: url, model: 'flux-1-schnell', fallback_reason: lastError }; } catch (error) { throw new Error(`scene ${sceneNumber}: SDXL failed after 3 attempts; Flux Schnell fallback also failed. SDXL=${lastError}; Flux=${error instanceof Error ? error.message : String(error)}`); }
 }
 
 async function resilientSceneImages(r: Request, e: any, body: any, requestId: string) {
@@ -96,10 +75,7 @@ async function resilientSceneImages(r: Request, e: any, body: any, requestId: st
   if (!scenes.length) return json(r, e, { ok: false, status: 'invalid_input', request_id: requestId, error: 'Storyboard contains no scenes.' }, 400);
   if (scenes.length > 1) return json(r, e, { ok: false, status: 'invalid_input', request_id: requestId, error: 'Scene image gateway expects one visual beat per request. Batch the beats at the client/orchestration layer so failures remain isolated.' }, 400);
   const started = Date.now(); const images: any[] = []; const models = new Set<string>();
-  try {
-    for (let i = 0; i < scenes.length; i += 1) { const sceneNumber = Number(scenes[i]?.scene || i + 1); const generated = await generateSceneImage(key, scenePrompt(payload, scenes[i], i, scenes.length), sceneNumber); images.push({ scene: sceneNumber, beatId: scenes[i]?.beatId || null, status: 'generated', image_url: generated.image_url, model: generated.model }); models.add(generated.model); }
-    return json(r, e, { ok: true, contract_version: CONTRACT, capability: 'image', provider: 'pixazo', model: Array.from(models).join('+'), request_id: requestId, latency_ms: Date.now() - started, result: { images, models_used: Array.from(models), scene_count: images.length, free_only: true } });
-  } catch (error) { return json(r, e, { ok: false, contract_version: CONTRACT, capability: 'image', provider: 'pixazo', status: 'provider_error', request_id: requestId, latency_ms: Date.now() - started, completed_scene_count: images.length, completed_scenes: images.map(image => image.scene), error: String(error instanceof Error ? error.message : error).slice(0, 2200) }, 502); }
+  try { for (let i = 0; i < scenes.length; i += 1) { const sceneNumber = Number(scenes[i]?.scene || i + 1); const generated = await generateSceneImage(key, scenePrompt(payload, scenes[i], i, scenes.length), sceneNumber); images.push({ scene: sceneNumber, beatId: scenes[i]?.beatId || null, status: 'generated', image_url: generated.image_url, model: generated.model }); models.add(generated.model); } return json(r, e, { ok: true, contract_version: CONTRACT, capability: 'image', provider: 'pixazo', model: Array.from(models).join('+'), request_id: requestId, latency_ms: Date.now() - started, result: { images, models_used: Array.from(models), scene_count: images.length, free_only: true } }); } catch (error) { return json(r, e, { ok: false, contract_version: CONTRACT, capability: 'image', provider: 'pixazo', status: 'provider_error', request_id: requestId, latency_ms: Date.now() - started, completed_scene_count: images.length, completed_scenes: images.map(image => image.scene), error: String(error instanceof Error ? error.message : error).slice(0, 2200) }, 502); }
 }
 
 async function storyboardWithRenderSafeBeats(r: Request, e: any, body: any) {
@@ -112,18 +88,39 @@ async function storyboardWithRenderSafeBeats(r: Request, e: any, body: any) {
   return new Response(JSON.stringify(updated, null, 2), { status: upstream.status, headers: { 'Content-Type': 'application/json', ...cors(r, e) } });
 }
 
-export default { async fetch(r: Request, e: any) {
-  if (r.method === 'OPTIONS') {
-    const origin = r.headers.get('Origin') || '';
-    const allowed = String(e.ALLOWED_ORIGIN || '').split(',').map((x: string) => x.trim()).filter(Boolean);
-    if (!origin || !allowed.includes(origin)) return new Response(null, { status: 403, headers: cors(r, e) });
-    return new Response(null, { status: 204, headers: cors(r, e) });
+async function languageGenerate(r: Request, e: any, body: any, requestId: string) {
+  if (body?.contract_version !== CONTRACT || body?.operation !== 'generate') return json(r, e, { ok: false, contract_version: CONTRACT, status: 'contract_mismatch', request_id: requestId, error: 'Expected BeatVision contract 1.1 language generate.' }, 400);
+  const token = e.LANGUAGE_PROVIDER_TOKEN;
+  if (!token) return json(r, e, { ok: false, contract_version: CONTRACT, status: 'provider_unavailable', request_id: requestId, error: 'No language provider token configured.' }, 503);
+  const payload = body?.payload || {};
+  const prompt = clip(payload?.prompt, 30000);
+  if (!prompt) return json(r, e, { ok: false, contract_version: CONTRACT, status: 'invalid_input', request_id: requestId, error: 'Language generation prompt is required.' }, 400);
+  const models = [String(e.LANGUAGE_PROVIDER_MODEL || 'openai'), LANGUAGE_FALLBACK_MODEL].filter((v, i, a) => a.indexOf(v) === i);
+  let lastError = 'Language provider request failed.';
+  const started = Date.now();
+  for (const model of models) {
+    const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), LANGUAGE_TIMEOUT_MS);
+    try {
+      const response = await fetch(e.LANGUAGE_PROVIDER_URL || 'https://gen.pollinations.ai/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'X-BeatVision-Request': requestId }, body: JSON.stringify({ model, messages: [{ role: 'system', content: 'You are the BeatVision visual-world director. Return ONLY valid JSON. Preserve creative intent, continuity, and production usefulness. Do not invent lyrics.' }, { role: 'user', content: prompt }], temperature: 0.7 }), signal: controller.signal });
+      const text = await response.text(); let data: any; try { data = JSON.parse(text); } catch { data = { raw: text.slice(0, 20000) }; }
+      const content = data?.choices?.[0]?.message?.content || '';
+      if (response.ok && content) return json(r, e, { ok: true, contract_version: CONTRACT, capability: 'language', provider: e.LANGUAGE_PROVIDER || 'pollinations', model, status: 'generated', latency_ms: Date.now() - started, request_id: requestId, result: parseJson(content) });
+      lastError = `Language provider ${response.status}: ${String(data?.error?.message || data?.error || text).slice(0, 1000)}`;
+      if (response.status < 500) break;
+    } catch (error) { lastError = error instanceof Error ? error.message : String(error); }
+    finally { clearTimeout(timer); }
   }
+  return json(r, e, { ok: false, contract_version: CONTRACT, capability: 'language', provider: 'pollinations', status: 'provider_error', request_id: requestId, latency_ms: Date.now() - started, error: lastError }, 502);
+}
+
+export default { async fetch(r: Request, e: any) {
+  if (r.method === 'OPTIONS') { const origin = r.headers.get('Origin') || ''; const allowed = String(e.ALLOWED_ORIGIN || '').split(',').map((x: string) => x.trim()).filter(Boolean); if (!origin || !allowed.includes(origin)) return new Response(null, { status: 403, headers: cors(r, e) }); return new Response(null, { status: 204, headers: cors(r, e) }); }
   const url = new URL(r.url), path = url.pathname, requestId = r.headers.get('X-BeatVision-Request') || crypto.randomUUID();
   if (path === '/' || path === '/health') return pixazo.fetch(r, e);
   if (!e.GATEWAY_TOKEN) return json(r, e, { ok: false, error: 'Gateway authentication is not configured.', request_id: requestId }, 503);
   if (r.headers.get('Authorization') !== `Bearer ${e.GATEWAY_TOKEN}`) return json(r, e, { ok: false, error: 'Unauthorized', request_id: requestId }, 401);
   let body: any; try { body = await r.clone().json(); } catch { return json(r, e, { ok: false, error: 'Invalid JSON request body.', request_id: requestId }, 400); }
+  if (path === '/v1/language/generate') return languageGenerate(r, e, body, requestId);
   if (body?.operation === 'sceneImages') return resilientSceneImages(r, e, body, requestId);
   if (body?.operation === 'storyboard') return storyboardWithRenderSafeBeats(r, e, body);
   return pixazo.fetch(r, e);
