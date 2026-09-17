@@ -2,6 +2,7 @@ import pixazo from './video-fallback-gateway';
 import { compileMusicalContext } from './musical-structure';
 import { splitLongBeats as splitLongBeatsWithMusic } from './scene-splitting';
 import { compileCharacterContinuity } from './character-continuity';
+import { compactAudio, normalizeVisualBeats, toStoryboard } from './visual-beat-engine';
 export { BeatVisionAnimationJob } from './animation-jobs';
 
 const BASE = 'https://gateway.pixazo.ai';
@@ -104,7 +105,18 @@ async function languageGenerate(r: Request, e: any, body: any, requestId: string
       const response = await fetch(e.LANGUAGE_PROVIDER_URL || 'https://gen.pollinations.ai/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'X-BeatVision-Request': requestId }, body: JSON.stringify({ model, messages: [{ role: 'system', content: 'You are the BeatVision visual-world director. Return ONLY valid JSON. Preserve creative intent, continuity, and production usefulness. Do not invent lyrics.' }, { role: 'user', content: prompt }], temperature: 0.7 }), signal: controller.signal });
       const text = await response.text(); let data: any; try { data = JSON.parse(text); } catch { data = { raw: text.slice(0, 20000) }; }
       const content = data?.choices?.[0]?.message?.content || '';
-      if (response.ok && content) return json(r, e, { ok: true, contract_version: CONTRACT, capability: 'language', provider: e.LANGUAGE_PROVIDER || 'pollinations', model, status: 'generated', latency_ms: Date.now() - started, request_id: requestId, result: parseJson(content) });
+      if (response.ok && content) {
+        const parsed = parseJson(content);
+        if (String(payload?.mode || '') === 'storyboard') {
+          const duration = Number(payload?.duration_seconds || payload?.durationSeconds || compactAudio(payload?.audio_analysis || payload?.audioAnalysis || payload?.audio || payload?.analysis)?.duration_seconds || 0);
+          const normalized = normalizeVisualBeats(parsed, duration);
+          if (normalized.errors.length) {
+            return json(r, e, { ok: false, contract_version: CONTRACT, capability: 'language', provider: e.LANGUAGE_PROVIDER || 'pollinations', model, status: 'visual_coverage_insufficient', latency_ms: Date.now() - started, request_id: requestId, result: toStoryboard(normalized), coverage: normalized.coverage, errors: normalized.errors, error: 'Storyboard failed the deterministic visual coverage/semantic quality gate.' }, 422);
+          }
+          return json(r, e, { ok: true, contract_version: CONTRACT, capability: 'language', provider: e.LANGUAGE_PROVIDER || 'pollinations', model, status: 'generated', latency_ms: Date.now() - started, request_id: requestId, result: toStoryboard(normalized), coverage: normalized.coverage });
+        }
+        return json(r, e, { ok: true, contract_version: CONTRACT, capability: 'language', provider: e.LANGUAGE_PROVIDER || 'pollinations', model, status: 'generated', latency_ms: Date.now() - started, request_id: requestId, result: parsed });
+      }
       lastError = `Language provider ${response.status}: ${String(data?.error?.message || data?.error || text).slice(0, 1000)}`;
       if (response.status < 500) break;
     } catch (error) { lastError = error instanceof Error ? error.message : String(error); }
