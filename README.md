@@ -34,7 +34,7 @@ BeatVision uses these Pixazo models:
 - **Shotstack Sandbox**: deterministic editing, stitching, transitions, audio and final MP4 assembly.
 - **Pollinations**: retained only for the already-proven Whisper audio analysis and language/world-direction layer, because Pixazo's current free catalog does not replace those free speech-to-text and general language functions in this architecture.
 
-The Arena does not assume that "free" means commercially licensed. Commercial rights, rate limits, attribution and other terms must be verified with each provider before production use.
+The Arena is the production execution authority for BeatVision. The main BeatVision application owns product state, approvals, UI and persistence; Arena owns provider execution, retries, durable motion jobs, media provenance and final assembly. The Arena does not assume that "free" means commercially licensed. Commercial rights, rate limits, attribution and other terms must be verified with each provider before production use.
 
 ## Pipeline
 
@@ -72,9 +72,9 @@ The Arena's browser stores only the gateway URL and temporary gateway token in t
 
 - **BeatVision**: production application.
 - **BeatVision-Test**: sponsor/provider presentation and proving ground.
-- **BeatVision-arena**: safe integration laboratory and provider contract testbed.
+- **BeatVision-arena**: canonical execution engine and provider contract authority.
 
-Nothing here requires overwriting either existing project. Once an arena capability is proven, it can be promoted deliberately into the production architecture.
+Nothing here requires overwriting either existing project. Arena capabilities are promoted directly into the production execution path; BeatVision remains the product shell around that engine.
 
 ## Current status
 
