@@ -54,6 +54,8 @@ const validated=read('worker/src/arena-validated-entry.ts');
 if(!validated.includes("const partial = operation === 'sceneImages'"))throw new Error('Scene image validation must allow isolated per-scene requests.');
 if(!validated.includes('export { BeatVisionAnimationJob }'))throw new Error('Durable Object class is not exported by the deployed Worker entrypoint.');
 const fallback=read('worker/src/video-fallback-gateway.ts');
+if(fallback.includes('fallback:{')||fallback.includes('shotstack-camera-motion'))throw new Error('Fallback capability is still advertised by the active Arena gateway.');
+if(!fallback.includes('enrichMotionResponse')||!fallback.includes('approval_status'))throw new Error('Motion provenance enrichment is missing from the active Arena gateway.');
 for(const token of ['approval_status','generation_type:\'GENERATIVE_VIDEO\'','asset_id'])if(!fallback.includes(token))throw new Error(`Motion output identity contract missing ${token}.`);
 const wrangler=read('worker/wrangler.toml');
 if(!wrangler.includes('main = "src/arena-validated-entry.ts"'))throw new Error('Wrangler entrypoint does not match the deployed validated Worker.');
