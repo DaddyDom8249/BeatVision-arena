@@ -1,4 +1,4 @@
-export type GenerationType = 'GENERATIVE_VIDEO' | 'CAMERA_MOTION_FALLBACK';
+export type GenerationType = 'GENERATIVE_VIDEO';
 
 export type ValidatedMotionClip = {
   scene: number;
@@ -36,16 +36,15 @@ export function targetDurationFromPayload(payload: any, fallback: number): numbe
 }
 
 export function inferGenerationType(clip: any): GenerationType | null {
-  if (clip?.generation_type === 'GENERATIVE_VIDEO' || clip?.generation_type === 'CAMERA_MOTION_FALLBACK') return clip.generation_type;
+  if (clip?.generation_type === 'GENERATIVE_VIDEO') return 'GENERATIVE_VIDEO';
   const provider = String(clip?.provider || '').toLowerCase();
   const source = String(clip?.source || '').toLowerCase();
   const model = String(clip?.model || '').toLowerCase();
   if (provider.includes('pixazo') || model.includes('ltx') || source.includes('pixazo')) return 'GENERATIVE_VIDEO';
-  if (provider.includes('shotstack') || model.includes('camera-motion') || source.includes('deterministic camera-motion fallback')) return 'CAMERA_MOTION_FALLBACK';
   return null;
 }
 
-export function buildCoverageManifest(clips: ValidatedMotionClip[], targetDurationSeconds: number, allowFallback = false): CoverageManifest {
+export function buildCoverageManifest(clips: ValidatedMotionClip[], targetDurationSeconds: number): CoverageManifest {
   const target = Math.max(0, Number(targetDurationSeconds) || 0);
   const seenAssets = new Set<string>();
   const seenSources = new Set<string>();
@@ -62,8 +61,7 @@ export function buildCoverageManifest(clips: ValidatedMotionClip[], targetDurati
     if (!assetId) throw new Error(`MEDIA_INTEGRITY_MISSING_ASSET_ID:${scene}`);
     if (!sourceUrl) throw new Error(`MEDIA_INTEGRITY_MISSING_SOURCE_URL:${scene}`);
     if (!Number.isFinite(duration) || duration <= 0) throw new Error(`MEDIA_INTEGRITY_MISSING_ACTUAL_DURATION:${scene}`);
-    if (type !== 'GENERATIVE_VIDEO' && type !== 'CAMERA_MOTION_FALLBACK') throw new Error(`MEDIA_INTEGRITY_UNKNOWN_GENERATION_TYPE:${scene}`);
-    if (type === 'CAMERA_MOTION_FALLBACK' && !allowFallback) throw new Error(`MEDIA_INTEGRITY_FALLBACK_NOT_APPROVED:${scene}`);
+    if (type !== 'GENERATIVE_VIDEO') throw new Error(`MEDIA_INTEGRITY_UNKNOWN_GENERATION_TYPE:${scene}`);
     if (seenScenes.has(scene)) throw new Error(`MEDIA_INTEGRITY_DUPLICATE_SCENE:${scene}`);
     if (seenAssets.has(assetId)) throw new Error(`MEDIA_INTEGRITY_DUPLICATE_ASSET:${assetId}`);
     if (seenSources.has(sourceUrl)) throw new Error(`MEDIA_INTEGRITY_DUPLICATE_SOURCE:${scene}`);
