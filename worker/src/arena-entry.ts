@@ -78,8 +78,9 @@ async function pixazoStatus(key: string, requestId: string) {
         throw new Error(String(last?.error || last?.message || `Pixazo job status ${status}`));
       }
     } catch (error) {
-      if (error instanceof Error && /Pixazo (4|5)\d\d/.test(error.message)) throw error;
-      last = { error: error instanceof Error ? error.message : String(error) };
+      const message = error instanceof Error ? error.message : String(error);
+      if (/Pixazo (4|5)\d\d/.test(message) || /job status (ERROR|FAILED|CANCELED)/i.test(message)) throw error;
+      last = { error: message };
     }
     await sleep(1500);
   }
