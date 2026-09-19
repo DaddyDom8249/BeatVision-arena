@@ -26,7 +26,10 @@ const json = (r: Request, e: any, data: unknown, status = 200) =>
   new Response(JSON.stringify(data, null, 2), { status, headers: { 'Content-Type': 'application/json', ...cors(r, e) } });
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const clip = (value: unknown, max: number) => String(value ?? '').slice(0, max);
-const media = (d: any) => d?.output?.media_url?.[0] || d?.output?.media_url || d?.output || d?.imageUrl || d?.image_url || d?.url || null;
+const media = (d: any) => {
+  const candidates = [d?.output?.media_url?.[0], d?.output?.media_url, d?.output, d?.imageUrl, d?.image_url, d?.url];
+  return candidates.find((value: unknown) => typeof value === 'string' && /^https?:\\/\\//i.test(value)) || null;
+};
 const parseJson = (text: string) => {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const candidate = fenced?.[1]?.trim() || text.trim();
@@ -39,8 +42,8 @@ const parseJson = (text: string) => {
 
 const scenePrompt = (payload: any, scene: any, index: number, total: number) => {
   const world = payload?.world || {};
-  const character = clip(JSON.stringify(world?.character_concept || {}), 1000);
-  const locations = clip(JSON.stringify(world?.locations || []), 800);
+  const character = clip(JSON.stringify(world?.character_concept || world?.character_sheet || {}), 1000);
+  const locations = clip(JSON.stringify(world?.locations || world?.environment_sheet || {}), 800);
   const motifs = clip(JSON.stringify(world?.visual_motifs || []), 900);
   const continuity = clip(JSON.stringify(world?.continuity_rules || []), 700);
   const characterContinuity = compileCharacterContinuity(scene, world);
@@ -65,67 +68,63 @@ async function pixazoPost(path: string, key: string, body: any) {
 }
 const requestIdFrom = (data: any) => data?.requestId || data?.request_id || data?.requestID || data?.id || null;
 
-async function pixazoStatus(key: string, requestId: string) {
-  const deadline = Date.now() + 45000;
-  let last: any = null;
+async function pixazoStatus(key: string, requestId: string, model: string) {
+  const deadline = Date.now() + 15000;
   while (Date.now() < deadline) {
-    try {
-      last = await pixazoPost('/flux-1-schnell/v1/checkStatus', key, { requestId });
-      const url = media(last);
-      const status = String(last?.status || '').toUpperCase();
-      if (url) return url;
-      if (status === 'ERROR' || status === 'FAILED' || status === 'CANCELED') {
-        throw new Error(String(last?.error || last?.message || `Pixazo job status ${status}`));
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (/Pixazo (4|5)\d\d/.test(message) || /job status (ERROR|FAILED|CANCELED)/i.test(message)) throw error;
-      last = { error: message };
+    const response = await fetch(`${BASE}/v2/requests/status/${encodeURIComponent(requestId)}`, {
+      headers: { 'Ocp-Apim-Subscription-Key': key, 'Cache-Control': 'no-cache' }
+    });
+    const text = await response.text();
+    let data: any;
+    try { data = JSON.parse(text); } catch { data = {}; }
+    if (!response.ok) throw new Error(`Pixazo ${model} status ${response.status}: ${text.slice(0, 1200)}`);
+    const url = media(data);
+    const status = String(data?.status || data?.state || '').toUpperCase();
+    if (url) return url;
+    if (['ERROR', 'FAILED', 'CANCELED', 'CANCELLED'].includes(status)) {
+      throw new Error(`Pixazo ${model} job ${status}: ${String(data?.error || data?.message || 'unknown provider error').slice(0, 1600)}`);
     }
     await sleep(1500);
   }
-  throw new Error(`Pixazo request ${requestId} did not complete within 45 seconds.`);
+  throw new Error(`Pixazo ${model} request ${requestId} did not complete within 15 seconds.`);
 }
 
 async function generateSceneImage(key: string, prompt: string, sceneNumber: number) {
-  let lastError = '';
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    try {
-      const data = await pixazoPost('/getImage/v1/getSDXLImage', key, {
-        prompt,
-        negative_prompt: 'low quality, blurry, distorted anatomy, duplicate face, extra limbs, text, logo, watermark, UI, caption, repeated composition, duplicate shot',
-        height: 768, width: 1344, num_steps: 20, guidance_scale: 5,
-        seed: Math.floor(Math.random() * 2147483647)
-      });
-      const url = media(data);
-      if (url) return { image_url: url, model: 'sdxl' };
-      const requestId = requestIdFrom(data);
-      if (requestId) {
-        const polled = await pixazoStatus(key, requestId);
-        return { image_url: polled, model: 'sdxl' };
-      }
-      throw new Error('SDXL completed without an image URL or request ID.');
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error);
-      if (attempt < 3) await sleep(1500 * attempt);
+  let sdxlError = '';
+  try {
+    const data = await pixazoPost('/getImage/v1/getSDXLImage', key, {
+      prompt,
+      negative_prompt: 'low quality, blurry, distorted anatomy, duplicate face, extra limbs, text, logo, watermark, UI, caption, repeated composition, duplicate shot',
+      height: 768, width: 1344, num_steps: 20, guidance_scale: 5,
+      seed: Math.floor(Math.random() * 2147483647)
+    });
+    const url = media(data);
+    if (url) return { image_url: url, model: 'sdxl' };
+    const requestId = requestIdFrom(data);
+    if (requestId) {
+      const polled = await pixazoStatus(key, requestId, 'sdxl');
+      return { image_url: polled, model: 'sdxl' };
     }
+    throw new Error('SDXL completed without an image URL or request ID.');
+  } catch (error) {
+    sdxlError = error instanceof Error ? error.message : String(error);
   }
 
   try {
     const data = await pixazoPost('/flux-1-schnell/v1/getData', key, {
-      prompt: clip(prompt, 12000), num_steps: 4, height: 768, width: 1344,
+      prompt: clip(prompt, 2048), num_steps: 4, height: 1024, width: 1024,
       seed: Math.floor(Math.random() * 2147483647)
     });
     const url = media(data);
-    if (url) return { image_url: url, model: 'flux-1-schnell', fallback_reason: lastError };
+    if (url) return { image_url: url, model: 'flux-1-schnell', fallback_reason: sdxlError };
     const requestId = requestIdFrom(data);
     if (requestId) {
-      const polled = await pixazoStatus(key, requestId);
-      return { image_url: polled, model: 'flux-1-schnell', fallback_reason: lastError };
+      const polled = await pixazoStatus(key, requestId, 'flux-schnell');
+      return { image_url: polled, model: 'flux-1-schnell', fallback_reason: sdxlError };
     }
     throw new Error('Flux Schnell completed without an image URL or request ID.');
   } catch (error) {
-    throw new Error(`scene ${sceneNumber}: SDXL failed after 3 attempts; Flux Schnell fallback also failed. SDXL=${lastError}; Flux=${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`scene ${sceneNumber}: SDXL failed: ${sdxlError}; Flux Schnell fallback failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
