@@ -21,7 +21,22 @@ export default {
     const token = String(env.GATEWAY_TOKEN || '').trim();
     const path = new URL(r.url).pathname;
 
-    if (path !== '/' && path !== '/health' && !token) {
+    if (path === '/health') {
+      return json(r, {
+        ok: true,
+        service: 'beatvision-provider-arena',
+        entrypoint: 'arena-validated-entry',
+        contract_version: '1.1',
+        configuration: {
+          gateway_token: Boolean(token),
+          pixazo_api_key: Boolean(String(env.PIXAZO_API_KEY || '').trim()),
+          language_provider_token: Boolean(String(env.LANGUAGE_PROVIDER_TOKEN || '').trim()),
+          shotstack_api_key: Boolean(String(env.SHOTSTACK_API_KEY || '').trim()),
+        },
+      });
+    }
+
+    if (path !== '/' && !token) {
       return json(r, { ok: false, error: 'Gateway authentication is not configured; refusing provider operation.' }, 503);
     }
     if (path !== '/' && path !== '/health' && r.headers.get('Authorization') !== `Bearer ${token}`) {
