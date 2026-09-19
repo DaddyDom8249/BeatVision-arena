@@ -63,10 +63,69 @@ async function pixazoPost(path: string, key: string, body: any) {
   if (!response.ok) throw new Error(`Pixazo ${response.status} at ${path}: ${String(data?.message || data?.error || text).slice(0, 1600)}`);
   return data;
 }
+const requestIdFrom = (data: any) => data?.requestId || data?.request_id || data?.requestID || data?.id || null;
+
+async function pixazoStatus(key: string, requestId: string) {
+  const deadline = Date.now() + 45000;
+  let last: any = null;
+  while (Date.now() < deadline) {
+    try {
+      last = await pixazoPost('/flux-1-schnell/v1/checkStatus', key, { requestId });
+      const url = media(last);
+      const status = String(last?.status || '').toUpperCase();
+      if (url) return url;
+      if (status === 'ERROR' || status === 'FAILED' || status === 'CANCELED') {
+        throw new Error(String(last?.error || last?.message || `Pixazo job status ${status}`));
+      }
+    } catch (error) {
+      if (error instanceof Error && /Pixazo (4|5)\d\d/.test(error.message)) throw error;
+      last = { error: error instanceof Error ? error.message : String(error) };
+    }
+    await sleep(1500);
+  }
+  throw new Error(`Pixazo request ${requestId} did not complete within 45 seconds.`);
+}
+
 async function generateSceneImage(key: string, prompt: string, sceneNumber: number) {
   let lastError = '';
-  for (let attempt = 1; attempt <= 3; attempt += 1) { try { const data = await pixazoPost('/getImage/v1/getSDXLImage', key, { prompt, negative_prompt: 'low quality, blurry, distorted anatomy, duplicate face, extra limbs, text, logo, watermark, UI, caption, repeated composition, duplicate shot', height: 768, width: 1344, num_steps: 20, guidance_scale: 5, seed: Math.floor(Math.random() * 2147483647) }); const url = media(data); if (!url) throw new Error('SDXL completed without an image URL.'); return { image_url: url, model: 'sdxl' }; } catch (error) { lastError = error instanceof Error ? error.message : String(error); if (attempt < 3) await sleep(1500 * attempt); } }
-  try { const data = await pixazoPost('/flux-1-schnell/v1/getData', key, { prompt: clip(prompt, 12000) }); const url = media(data); if (!url) throw new Error('Flux Schnell completed without an image URL.'); return { image_url: url, model: 'flux-1-schnell', fallback_reason: lastError }; } catch (error) { throw new Error(`scene ${sceneNumber}: SDXL failed after 3 attempts; Flux Schnell fallback also failed. SDXL=${lastError}; Flux=${error instanceof Error ? error.message : String(error)}`); }
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const data = await pixazoPost('/getImage/v1/getSDXLImage', key, {
+        prompt,
+        negative_prompt: 'low quality, blurry, distorted anatomy, duplicate face, extra limbs, text, logo, watermark, UI, caption, repeated composition, duplicate shot',
+        height: 768, width: 1344, num_steps: 20, guidance_scale: 5,
+        seed: Math.floor(Math.random() * 2147483647)
+      });
+      const url = media(data);
+      if (url) return { image_url: url, model: 'sdxl' };
+      const requestId = requestIdFrom(data);
+      if (requestId) {
+        const polled = await pixazoStatus(key, requestId);
+        return { image_url: polled, model: 'sdxl' };
+      }
+      throw new Error('SDXL completed without an image URL or request ID.');
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      if (attempt < 3) await sleep(1500 * attempt);
+    }
+  }
+
+  try {
+    const data = await pixazoPost('/flux-1-schnell/v1/getData', key, {
+      prompt: clip(prompt, 12000), num_steps: 4, height: 768, width: 1344,
+      seed: Math.floor(Math.random() * 2147483647)
+    });
+    const url = media(data);
+    if (url) return { image_url: url, model: 'flux-1-schnell', fallback_reason: lastError };
+    const requestId = requestIdFrom(data);
+    if (requestId) {
+      const polled = await pixazoStatus(key, requestId);
+      return { image_url: polled, model: 'flux-1-schnell', fallback_reason: lastError };
+    }
+    throw new Error('Flux Schnell completed without an image URL or request ID.');
+  } catch (error) {
+    throw new Error(`scene ${sceneNumber}: SDXL failed after 3 attempts; Flux Schnell fallback also failed. SDXL=${lastError}; Flux=${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 async function resilientSceneImages(r: Request, e: any, body: any, requestId: string) {
