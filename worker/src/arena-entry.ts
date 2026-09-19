@@ -28,7 +28,7 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const clip = (value: unknown, max: number) => String(value ?? '').slice(0, max);
 const media = (d: any) => {
   const candidates = [d?.output?.media_url?.[0], d?.output?.media_url, d?.output, d?.imageUrl, d?.image_url, d?.url];
-  return candidates.find((value: unknown) => typeof value === 'string' && /^https?:\\/\\//i.test(value)) || null;
+  return candidates.find((value: unknown) => typeof value === 'string' && /^https?:\/\//i.test(value)) || null;
 };
 const parseJson = (text: string) => {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
