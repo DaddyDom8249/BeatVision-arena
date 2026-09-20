@@ -115,10 +115,10 @@ async function img(key: string, model: 'flux-schnell' | 'sdxl', promptText: stri
 
   const data = await call('/getImage/v1/getSDXLImage', key, {
     prompt: clip(promptText, 12000),
-    height: aspect === 'wide' ? 576 : 1024,
-    width: 1024,
+    height: aspect === 'wide' ? 768 : 1024,
+    width: aspect === 'wide' ? 1344 : 1024,
     num_steps: 20,
-    guidance: 5
+    guidance_scale: 5
   }, model);
   const url = media(data);
   if (!url) throw new Error(`Pixazo ${model} returned no image URL.`);
