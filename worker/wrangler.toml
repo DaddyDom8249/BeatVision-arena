@@ -3,7 +3,7 @@ main = "src/arena-validated-entry.ts"
 compatibility_date = "2026-09-09"
 
 [vars]
-ALLOWED_ORIGIN = "https://daddydom8249.github.io"
+ALLOWED_ORIGIN = "https://daddydom8249.github.io,https://beat-vision-theta.vercel.app"
 LANGUAGE_PROVIDER_MODEL = "openai"
 LANGUAGE_PROVIDER = "pollinations"
 LANGUAGE_PROVIDER_URL = "https://gen.pollinations.ai/v1/chat/completions"
