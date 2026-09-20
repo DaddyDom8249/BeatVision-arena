@@ -79,7 +79,36 @@ async function pixazoStatus(key: string, requestId: string, model: string) {
     const text = await response.text();
     let data: any;
     try { data = JSON.parse(text); } catch { data = {}; }
-    if (!response.ok) throw new Error(`Pixazo ${model} status ${response.status}: ${text.slice(0, 1200)}`);
+    if (!response.ok) {
+      // Flux Schnell has historically exposed a model-specific status endpoint.
+      // Keep the universal v2 endpoint as the primary path, but fall back to
+      // the documented legacy endpoint if the universal route rejects the job.
+      if (model === 'flux-schnell') {
+        const legacy = await fetch(`${BASE}/flux-1-schnell/v1/checkStatus`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Ocp-Apim-Subscription-Key': key,
+            'Cache-Control': 'no-cache'
+          },
+          body: JSON.stringify({ requestId })
+        });
+        const legacyText = await legacy.text();
+        let legacyData: any;
+        try { legacyData = JSON.parse(legacyText); } catch { legacyData = {}; }
+        if (!legacy.ok) {
+          throw new Error(`Pixazo ${model} status ${response.status}; legacy status ${legacy.status}: ${legacyText.slice(0, 1200)}`);
+        }
+        const legacyUrl = media(legacyData);
+        const legacyStatus = String(legacyData?.status || legacyData?.state || '').toUpperCase();
+        if (legacyUrl) return legacyUrl;
+        if (['ERROR', 'FAILED', 'CANCELED', 'CANCELLED'].includes(legacyStatus)) {
+          throw new Error(`Pixazo ${model} legacy job ${legacyStatus}: ${String(legacyData?.error || legacyData?.message || 'unknown provider error').slice(0, 1600)}`);
+        }
+        throw new Error(`Pixazo ${model} status rejected the universal endpoint and legacy status returned no media URL: ${legacyText.slice(0, 1200)}`);
+      }
+      throw new Error(`Pixazo ${model} status ${response.status}: ${text.slice(0, 1200)}`);
+    }
     const url = media(data);
     const status = String(data?.status || data?.state || '').toUpperCase();
     if (url) return url;
@@ -135,9 +164,33 @@ async function generateSceneImage(key: string, prompt: string, sceneNumber: numb
     }
     throw new Error(`Flux Schnell completed without an image URL or request ID. Body: ${JSON.stringify(data).slice(0, 800)}`);
   } catch (error) {
-    throw new Error(
-      `scene ${sceneNumber}: SDXL failed: ${sdxlError}; Flux Schnell fallback failed: ${error instanceof Error ? error.message : String(error)}`
-    );
+    const fluxError = error instanceof Error ? error.message : String(error);
+
+    // Final free fallback: current Pixazo SDXL Turbo endpoint is synchronous
+    // and returns an output URL directly, avoiding queue/status incompatibilities.
+    try {
+      const turbo = await pixazoPost('/sdxlTurbo/v2/getData', key, {
+        prompt: clip(prompt, 12000),
+        height: 768,
+        width: 768,
+        num_inference_steps: 1,
+        guidance_scale: 0,
+        seed: Math.floor(Math.random() * 2147483647)
+      });
+      const turboUrl = media(turbo);
+      if (turboUrl) {
+        return {
+          image_url: turboUrl,
+          model: 'sdxl-turbo',
+          fallback_reason: `${sdxlError}; ${fluxError}`
+        };
+      }
+      throw new Error(`SDXL Turbo returned no image URL. Body: ${JSON.stringify(turbo).slice(0, 800)}`);
+    } catch (turboError) {
+      throw new Error(
+        `scene ${sceneNumber}: SDXL failed: ${sdxlError}; Flux Schnell fallback failed: ${fluxError}; SDXL Turbo fallback failed: ${turboError instanceof Error ? turboError.message : String(turboError)}`
+      );
+    }
   }
 }
 
