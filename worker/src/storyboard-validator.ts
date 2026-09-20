@@ -33,8 +33,12 @@ export function validateStoryboard(storyboard: any, songDuration?: number, parti
       issues.push({ code: 'INVALID_DURATION', severity: 'error', scene: number, message: 'Scene must have a positive finite duration.' });
       continue;
     }
-    if (start < -TIMELINE_EPSILON_SECONDS || (duration > 0 && end > duration + TIMELINE_EPSILON_SECONDS)) {
-      issues.push({ code: 'OUTSIDE_SONG', severity: 'error', scene: number, message: `Scene ${number} falls outside the song timeline.` });
+    // Full storyboards must stay inside the song. Partial sceneImages requests
+    // intentionally send one beat and may use estimated timestamps.
+    if (!partial) {
+      if (start < -TIMELINE_EPSILON_SECONDS || (duration > 0 && end > duration + TIMELINE_EPSILON_SECONDS)) {
+        issues.push({ code: 'OUTSIDE_SONG', severity: 'error', scene: number, message: `Scene ${number} falls outside the song timeline.` });
+      }
     }
     if (!partial) {
       if (start < cursor - TIMELINE_EPSILON_SECONDS) {
