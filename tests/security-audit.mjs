@@ -35,8 +35,8 @@ if (gateway.includes("(!allowed.length||allowed.includes(o))?o:(allowed[0]||'*')
 if (!gateway.includes("if(o&&allowed.includes(o))h['Access-Control-Allow-Origin']=o")) {
   throw new Error('Provider gateway CORS allowlist enforcement is missing.');
 }
-if (!wrangler.includes('ALLOWED_ORIGIN = "https://daddydom8249.github.io"')) {
-  throw new Error('Production CORS origin is not explicitly configured.');
+if (!wrangler.includes('ALLOWED_ORIGIN = "https://daddydom8249.github.io,https://beat-vision-theta.vercel.app"')) {
+  throw new Error('Production CORS origins are not explicitly configured.');
 }
 
 console.log('SECURITY AUDIT PASS');
