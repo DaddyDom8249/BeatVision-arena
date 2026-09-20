@@ -24,8 +24,8 @@ if (ambiguousBlock.includes('failOrFallback')) {
   throw new Error('An accepted Pixazo request must never enter fallback because its status lookup is ambiguous.');
 }
 
-if (!animation.includes("if(['ERROR','FAILED','CANCELLED'].includes(status)){await this.failOrFallback")) {
-  throw new Error('Definitive Pixazo terminal failure must remain the explicit fallback trigger.');
+if (!animation.includes("if(['ERROR','FAILED','CANCELLED'].includes(status)){await this.failGeneration")) {
+  throw new Error('Definitive Pixazo terminal failure must remain the explicit terminal failure trigger.');
 }
 
 if (!animation.includes('status_retries:0')) {
