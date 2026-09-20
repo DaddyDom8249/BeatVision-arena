@@ -17,8 +17,7 @@ try{
   assert.throws(()=>buildCoverageManifest([clip(1,'asset-1'),clip(2,'asset-1')],10),/MEDIA_INTEGRITY_DUPLICATE_ASSET/);
   assert.throws(()=>buildCoverageManifest([clip(1,'asset-1',5,'https://example.test/same.mp4'),clip(2,'asset-2',5,'https://example.test/same.mp4')],10),/MEDIA_INTEGRITY_DUPLICATE_SOURCE/);
   assert.throws(()=>assertSufficientCoverage(buildCoverageManifest([clip(1,'asset-1',5)],10)),/INSUFFICIENT_UNIQUE_VISUAL_COVERAGE/);
-  assert.throws(()=>buildCoverageManifest([{...clip(1,'asset-1'),generation_type:'CAMERA_MOTION_FALLBACK'}],5),/MEDIA_INTEGRITY_FALLBACK_NOT_APPROVED/);
-  assert.doesNotThrow(()=>assertSufficientCoverage(buildCoverageManifest([{...clip(1,'asset-1'),generation_type:'CAMERA_MOTION_FALLBACK'}],5,true)));
+  assert.throws(()=>buildCoverageManifest([{...clip(1,'asset-1'),generation_type:'CAMERA_MOTION_FALLBACK'}],5),/MEDIA_INTEGRITY_UNKNOWN_GENERATION_TYPE/);
   assert.throws(()=>buildCoverageManifest([{scene:1,asset_id:'asset-1',source_url:'https://example.test/a.mp4',generation_type:'GENERATIVE_VIDEO',actual_duration_seconds:0}],5),/MEDIA_INTEGRITY_MISSING_ACTUAL_DURATION/);
   console.log('RENDER INTEGRITY ADVERSARIAL TESTS PASS');
 }finally{rmSync(dir,{recursive:true,force:true});}
