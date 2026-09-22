@@ -1,9 +1,9 @@
-import pixazo from './video-fallback-gateway';
-import { compileMusicalContext } from './musical-structure';
-import { splitLongBeats as splitLongBeatsWithMusic } from './scene-splitting';
-import { compileCharacterContinuity } from './character-continuity';
-import { compactAudio, normalizeVisualBeats, toStoryboard } from './visual-beat-engine';
-export { BeatVisionAnimationJob } from './animation-jobs';
+import pixazo from './video-fallback-gateway.ts';
+import { compileMusicalContext } from './musical-structure.ts';
+import { splitLongBeats as splitLongBeatsWithMusic } from './scene-splitting.ts';
+import { compileCharacterContinuity } from './character-continuity.ts';
+import { compactAudio, normalizeVisualBeats, toStoryboard } from './visual-beat-engine.ts';
+export { BeatVisionAnimationJob } from './animation-jobs.ts';
 
 const BASE = 'https://gateway.pixazo.ai';
 const CONTRACT = '1.1';
@@ -201,7 +201,7 @@ async function resilientSceneImages(r: Request, e: any, body: any, requestId: st
   if (!scenes.length) return json(r, e, { ok: false, status: 'invalid_input', request_id: requestId, error: 'Storyboard contains no scenes.' }, 400);
   if (scenes.length > 1) return json(r, e, { ok: false, status: 'invalid_input', request_id: requestId, error: 'Scene image gateway expects one visual beat per request. Batch the beats at the client/orchestration layer so failures remain isolated.' }, 400);
   const started = Date.now(); const images: any[] = []; const models = new Set<string>();
-  try { for (let i = 0; i < scenes.length; i += 1) { const sceneNumber = Number(scenes[i]?.scene || i + 1); const generated = await generateSceneImage(key, scenePrompt(payload, scenes[i], i, scenes.length), sceneNumber); images.push({ scene: sceneNumber, beatId: scenes[i]?.beatId || null, status: 'generated', image_url: generated.image_url, model: generated.model }); models.add(generated.model); } return json(r, e, { ok: true, contract_version: CONTRACT, capability: 'image', provider: 'pixazo', model: Array.from(models).join('+'), request_id: requestId, latency_ms: Date.now() - started, result: { images, models_used: Array.from(models), scene_count: images.length, free_only: true } }); } catch (error) { return json(r, e, { ok: false, contract_version: CONTRACT, capability: 'image', provider: 'pixazo', status: 'provider_error', request_id: requestId, latency_ms: Date.now() - started, completed_scene_count: images.length, completed_scenes: images.map(image => image.scene), error: String(error instanceof Error ? error.message : error).slice(0, 2200) }, 502); }
+  try { for (let i = 0; i < scenes.length; i += 1) { const sceneNumber = Number(scenes[i]?.scene || i + 1); const generated = await generateSceneImage(key, scenePrompt(payload, scenes[i], i, scenes.length), sceneNumber); images.push({ scene: sceneNumber, beatId: scenes[i]?.beatId || null, status: 'generated', image_url: generated.image_url, model: generated.model }); models.add(generated.model); } return json(r, e, { ok: true, contract_version: CONTRACT, capability: 'image', provider: 'pixazo', model: Array.from(models).join('+'), request_id: requestId, latency_ms: Date.now() - started, result: { images, models_used: Array.from(models), scene_count: images.length, free_only: true } }); } catch (error) { const rawError = String(error instanceof Error ? error.message : error); const sanitized = key ? rawError.split(key).join('[REDACTED]') : rawError; return json(r, e, { ok: false, contract_version: CONTRACT, capability: 'image', provider: 'pixazo', status: 'provider_error', request_id: requestId, latency_ms: Date.now() - started, completed_scene_count: images.length, completed_scenes: images.map(image => image.scene), error: sanitized.slice(0, 2200) }, 502); }
 }
 
 async function storyboardWithRenderSafeBeats(r: Request, e: any, body: any) {
@@ -254,6 +254,33 @@ export default { async fetch(r: Request, e: any) {
   if (r.method === 'OPTIONS') { const origin = r.headers.get('Origin') || ''; const allowed = String(e.ALLOWED_ORIGIN || '').split(',').map((x: string) => x.trim()).filter(Boolean); if (!origin || !allowed.includes(origin)) return new Response(null, { status: 403, headers: cors(r, e) }); return new Response(null, { status: 204, headers: cors(r, e) }); }
   const url = new URL(r.url), path = url.pathname, requestId = r.headers.get('X-BeatVision-Request') || crypto.randomUUID();
   if (path === '/' || path === '/health') return pixazo.fetch(r, e);
+  if (path === '/v1/client/image/scene') {
+    if (r.method !== 'POST') return json(r, e, { ok: false, error: 'Method Not Allowed' }, 405);
+    let clientBody: any; try { clientBody = await r.json(); } catch { return json(r, e, { ok: false, error: 'Invalid JSON request body.', request_id: requestId }, 400); }
+    if (clientBody?.scene && !clientBody?.payload?.storyboard?.scenes) {
+      const sceneObj = {
+        ...clientBody.scene,
+        scene: Number(clientBody.scene.sceneNumber || clientBody.scene.scene || 1),
+        beatId: clientBody.scene.id || clientBody.scene.beatId || `scene-${clientBody.scene.sceneNumber || 1}`
+      };
+      clientBody = {
+        contract_version: clientBody.contract_version || CONTRACT,
+        operation: 'sceneImages',
+        payload: {
+          style: clientBody.style || clientBody.scene?.visualLanguage || 'Dark industrial realism, cinematic lighting, coherent recurring character and environment.',
+          world: clientBody.world || {
+            the_world: clientBody.scene?.environment?.name || '',
+            characters: clientBody.scene?.characters || [],
+            locations: clientBody.scene?.environment ? [clientBody.scene.environment] : []
+          },
+          storyboard: {
+            scenes: [sceneObj]
+          }
+        }
+      };
+    }
+    return resilientSceneImages(r, e, clientBody, requestId);
+  }
   if (!e.GATEWAY_TOKEN) return json(r, e, { ok: false, error: 'Gateway authentication is not configured.', request_id: requestId }, 503);
   if (r.headers.get('Authorization') !== `Bearer ${e.GATEWAY_TOKEN}`) return json(r, e, { ok: false, error: 'Unauthorized', request_id: requestId }, 401);
   let body: any; try { body = await r.clone().json(); } catch { return json(r, e, { ok: false, error: 'Invalid JSON request body.', request_id: requestId }, 400); }
