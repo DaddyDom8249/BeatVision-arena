@@ -3,6 +3,7 @@ import { compileMusicalContext } from './musical-structure.ts';
 import { splitLongBeats as splitLongBeatsWithMusic } from './scene-splitting.ts';
 import { compileCharacterContinuity } from './character-continuity.ts';
 import { compactAudio, normalizeVisualBeats, toStoryboard } from './visual-beat-engine.ts';
+import { getShotstackRenderStatus } from './shotstack-gateway.ts';
 export { BeatVisionAnimationJob } from './animation-jobs.ts';
 
 const BASE = 'https://gateway.pixazo.ai';
@@ -284,6 +285,15 @@ export default { async fetch(r: Request, e: any) {
   if (!e.GATEWAY_TOKEN) return json(r, e, { ok: false, error: 'Gateway authentication is not configured.', request_id: requestId }, 503);
   if (r.headers.get('Authorization') !== `Bearer ${e.GATEWAY_TOKEN}`) return json(r, e, { ok: false, error: 'Unauthorized', request_id: requestId }, 401);
   let body: any; try { body = await r.clone().json(); } catch { return json(r, e, { ok: false, error: 'Invalid JSON request body.', request_id: requestId }, 400); }
+  const renderStatusMatch = path.match(/^\/v1\/video\/assemble\/status\/([A-Za-z0-9-]+)$/);
+  if (renderStatusMatch) {
+    if (r.method !== 'POST') return json(r, e, { ok: false, error: 'POST required', request_id: requestId }, 405);
+    const payload = body?.payload || {};
+    const renderId = renderStatusMatch[1];
+    const targetDuration = Number(payload?.target_duration_seconds || payload?.targetDurationSeconds || 0);
+    if (!(targetDuration > 0)) return json(r, e, { ok: false, error: 'target_duration_seconds is required.', request_id: requestId }, 400);
+    return getShotstackRenderStatus(r, e, renderId, targetDuration);
+  }
   if (path === '/v1/language/generate') return languageGenerate(r, e, body, requestId);
   if (body?.operation === 'sceneImages') return resilientSceneImages(r, e, body, requestId);
   if (body?.operation === 'storyboard') return storyboardWithRenderSafeBeats(r, e, body);
