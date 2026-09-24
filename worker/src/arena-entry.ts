@@ -9,6 +9,7 @@ export { BeatVisionAnimationJob } from './animation-jobs.ts';
 const BASE = 'https://gateway.pixazo.ai';
 const CONTRACT = '1.1';
 const LANGUAGE_FALLBACK_MODEL = 'openai-fast';
+const ALLOWED_LANGUAGE_MODELS = new Set(['openai', 'openai-fast']);
 const LANGUAGE_TIMEOUT_MS = 60000;
 
 const cors = (r: Request, e: any) => {
@@ -222,7 +223,9 @@ async function languageGenerate(r: Request, e: any, body: any, requestId: string
   const payload = body?.payload || {};
   const prompt = clip(payload?.prompt, 30000);
   if (!prompt) return json(r, e, { ok: false, contract_version: CONTRACT, status: 'invalid_input', request_id: requestId, error: 'Language generation prompt is required.' }, 400);
-  const models = [String(e.LANGUAGE_PROVIDER_MODEL || 'openai'), LANGUAGE_FALLBACK_MODEL].filter((v, i, a) => a.indexOf(v) === i);
+  const configuredModel = String(e.LANGUAGE_PROVIDER_MODEL || 'openai').trim().toLowerCase();
+  const primaryModel = ALLOWED_LANGUAGE_MODELS.has(configuredModel) ? configuredModel : 'openai';
+  const models = [primaryModel, LANGUAGE_FALLBACK_MODEL].filter((v, i, a) => a.indexOf(v) === i);
   let lastError = 'Language provider request failed.';
   const started = Date.now();
   for (const model of models) {
