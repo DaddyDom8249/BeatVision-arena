@@ -27,9 +27,9 @@ export async function getShotstackRenderStatus(r:Request,e:any,renderId:string,t
   const status=String(response.status||'').toLowerCase();
   if(status==='done'){
    const duration=Number(response.duration);
-   if(!(duration>0)||!(targetDuration>0)||Math.abs(duration-targetDuration)>0.35)return json(r,e,{ok:false,contract_version:'1.1',capability:'video',provider:'shotstack',status:'media_integrity_rejected',request_id:id,render_id:renderId,error:`FINAL_MEDIA_DURATION_MISMATCH: expected=${targetDuration.toFixed(3)}s actual=${Number.isFinite(duration)?duration.toFixed(3):'unknown'}s`},422);
+   if(!(duration>0)||!(targetDuration>0)||Math.abs(duration-targetDuration)>0.35)return json(r,e,{ok:true,contract_version:'1.1',capability:'video',provider:'shotstack',status:'failed',request_id:id,result:{status:'failed',render_id:renderId,error:`FINAL_MEDIA_DURATION_MISMATCH: expected=${targetDuration.toFixed(3)}s actual=${Number.isFinite(duration)?duration.toFixed(3):'unknown'}s`}});
   }
-  if(['failed','error'].includes(status))return json(r,e,{ok:false,contract_version:'1.1',capability:'video',provider:'shotstack',status:'provider_error',request_id:id,render_id:renderId,error:String(response.error||status).slice(0,1800)},502);
+  if(['failed','error'].includes(status))return json(r,e,{ok:true,contract_version:'1.1',capability:'video',provider:'shotstack',status:'failed',request_id:id,result:{status:'failed',render_id:renderId,error:String(response.error||status).slice(0,1800)}});
   return json(r,e,{ok:true,contract_version:'1.1',capability:'video',provider:'shotstack',environment:'sandbox',delivery:status==='done'?'temporary_url':'render_id',watermark:true,request_id:id,result:{status:status||'unknown',render_id:renderId,video_url:status==='done'?response.url:null,preview_url:status==='done'?response.url:null,duration_seconds:Number(response.duration)||null,target_duration_seconds:targetDuration,render_integrity:status==='done'?'PASS':'PENDING'}});
  }catch(error){return json(r,e,{ok:false,contract_version:'1.1',capability:'video',provider:'shotstack',status:'provider_error',request_id:id,render_id:renderId,error:String(error instanceof Error?error.message:error).slice(0,2000)},502);}
 }
