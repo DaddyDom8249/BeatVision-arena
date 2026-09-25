@@ -8,8 +8,6 @@ export { BeatVisionAnimationJob } from './animation-jobs.ts';
 
 const BASE = 'https://gateway.pixazo.ai';
 const CONTRACT = '1.1';
-const LANGUAGE_FALLBACK_MODEL = 'openai-fast';
-const ALLOWED_LANGUAGE_MODELS = new Set(['openai', 'openai-fast']);
 const LANGUAGE_TIMEOUT_MS = 60000;
 
 const cors = (r: Request, e: any) => {
@@ -217,82 +215,153 @@ async function storyboardWithRenderSafeBeats(r: Request, e: any, body: any) {
 }
 
 async function languageGenerate(r: Request, e: any, body: any, requestId: string) {
-  if (body?.contract_version !== CONTRACT || body?.operation !== 'generate') return json(r, e, { ok: false, contract_version: CONTRACT, status: 'contract_mismatch', request_id: requestId, error: 'Expected BeatVision contract 1.1 language generate.' }, 400);
-  const token = e.LANGUAGE_PROVIDER_TOKEN;
-  if (!token) return json(r, e, { ok: false, contract_version: CONTRACT, status: 'provider_unavailable', request_id: requestId, error: 'No language provider token configured.' }, 503);
+  if (body?.contract_version !== CONTRACT || body?.operation !== 'generate') {
+    return json(r, e, {
+      ok: false,
+      contract_version: CONTRACT,
+      status: 'contract_mismatch',
+      request_id: requestId,
+      error: 'Expected BeatVision contract 1.1 language generate.'
+    }, 400);
+  }
+
+  const token = String(e.EXTERNAL_LANGUAGE_PROVIDER_TOKEN || '').trim();
+  const url = String(e.EXTERNAL_LANGUAGE_PROVIDER_URL || '').trim();
+  const model = String(e.EXTERNAL_LANGUAGE_PROVIDER_MODEL || '').trim();
+  if (!token || !url || !model) {
+    return json(r, e, {
+      ok: false,
+      contract_version: CONTRACT,
+      capability: 'language',
+      status: 'provider_unavailable',
+      request_id: requestId,
+      error: 'No external language provider is configured. Configure EXTERNAL_LANGUAGE_PROVIDER_URL, EXTERNAL_LANGUAGE_PROVIDER_MODEL and EXTERNAL_LANGUAGE_PROVIDER_TOKEN.'
+    }, 503);
+  }
+
   const payload = body?.payload || {};
   const prompt = clip(payload?.prompt, 30000);
-  if (!prompt) return json(r, e, { ok: false, contract_version: CONTRACT, status: 'invalid_input', request_id: requestId, error: 'Language generation prompt is required.' }, 400);
-  const configuredModel = String(e.LANGUAGE_PROVIDER_MODEL || 'openai').trim().toLowerCase();
-  const primaryModel = ALLOWED_LANGUAGE_MODELS.has(configuredModel) ? configuredModel : 'openai';
-  const models = [primaryModel, LANGUAGE_FALLBACK_MODEL].filter((v, i, a) => a.indexOf(v) === i);
-  let lastError = 'Language provider request failed.';
+  if (!prompt) return json(r, e, {
+    ok: false,
+    contract_version: CONTRACT,
+    capability: 'language',
+    status: 'invalid_input',
+    request_id: requestId,
+    error: 'Language generation prompt is required.'
+  }, 400);
+
   const started = Date.now();
-  for (const model of models) {
-    const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), LANGUAGE_TIMEOUT_MS);
-    try {
-      const response = await fetch(e.LANGUAGE_PROVIDER_URL || 'https://gen.pollinations.ai/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'X-BeatVision-Request': requestId }, body: JSON.stringify({ model, messages: [{ role: 'system', content: 'You are the BeatVision visual-world director. Return ONLY a valid JSON object. Never return prose, markdown, a single character, or a JSON string. Preserve creative intent, continuity, song timing, and production usefulness. Do not invent lyrics.' }, { role: 'user', content: prompt }], temperature: 0.4, response_format: { type: 'json_object' } }), signal: controller.signal });
-      const text = await response.text(); let data: any; try { data = JSON.parse(text); } catch { data = { raw: text.slice(0, 20000) }; }
-      const content = data?.choices?.[0]?.message?.content || '';
-      if (response.ok && content) {
-        const parsed = parseJson(content);
-        if (String(payload?.mode || '') === 'storyboard') {
-          const duration = Number(payload?.duration_seconds || payload?.durationSeconds || compactAudio(payload?.audio_analysis || payload?.audioAnalysis || payload?.audio || payload?.analysis)?.duration_seconds || 0);
-          const normalized = normalizeVisualBeats(parsed, duration);
-          if (!normalized.errors.length) {
-            return json(r, e, { ok: true, contract_version: CONTRACT, capability: 'language', provider: e.LANGUAGE_PROVIDER || 'pollinations', model, status: 'generated', latency_ms: Date.now() - started, request_id: requestId, result: toStoryboard(normalized), coverage: normalized.coverage });
-          }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LANGUAGE_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'X-BeatVision-Request': requestId
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are the BeatVision visual-world director. Return ONLY a valid JSON object. Never return prose, markdown, a single character, or a JSON string. Preserve creative intent, continuity, song timing, and production usefulness. Do not invent lyrics.'
+          },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.4,
+        response_format: { type: 'json_object' }
+      }),
+      signal: controller.signal
+    });
 
-          if (normalized.errors.some((x: string) => x === 'No visual beats were produced.')) {
-            const repairPrompt = [
-              'Repair the BeatVision storyboard request below.',
-              'Return ONLY one valid JSON object with exactly these top-level keys: sections, visual_beats, coverage_notes.',
-              'visual_beats MUST be a non-empty JSON array.',
-              'Every beat MUST have numeric startTime and endTime with endTime greater than startTime.',
-              'Use the supplied song duration when present. Cover the complete timeline from 0 to duration.',
-              'Do not return a single character, markdown, prose, null, or an empty array.',
-              'Do not invent lyrics. Instrumental intervals must use lyricRange and lyricMeaning describing the interval as non-lyrical.',
-              'Song duration: ' + (duration > 0 ? String(duration) : 'not supplied') + '.',
-              'Original storyboard prompt:',
-              prompt
-            ].join('\\n');
-            const repairResponse = await fetch(e.LANGUAGE_PROVIDER_URL || 'https://gen.pollinations.ai/v1/chat/completions', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-BeatVision-Request': requestId },
-              body: JSON.stringify({
-                model,
-                messages: [
-                  { role: 'system', content: 'You are repairing a BeatVision storyboard. Output ONLY valid JSON matching the requested structure.' },
-                  { role: 'user', content: repairPrompt }
-                ],
-                temperature: 0.2,
-                response_format: { type: 'json_object' }
-              }),
-              signal: AbortSignal.timeout(LANGUAGE_TIMEOUT_MS)
-            });
-            const repairText = await repairResponse.text();
-            let repairData: any;
-            try { repairData = JSON.parse(repairText); } catch { repairData = { raw: repairText.slice(0, 20000) }; }
-            const repairContent = repairData?.choices?.[0]?.message?.content || '';
-            if (repairResponse.ok && repairContent) {
-              const repaired = parseJson(repairContent);
-              const repairedNormalized = normalizeVisualBeats(repaired, duration);
-              if (!repairedNormalized.errors.length) {
-                return json(r, e, { ok: true, contract_version: CONTRACT, capability: 'language', provider: e.LANGUAGE_PROVIDER || 'pollinations', model, status: 'generated_repaired', latency_ms: Date.now() - started, request_id: requestId, result: toStoryboard(repairedNormalized), coverage: repairedNormalized.coverage });
-              }
-            }
-          }
+    const text = await response.text();
+    let data: any;
+    try { data = JSON.parse(text); } catch { data = { raw: text.slice(0, 20000) }; }
+    const content = data?.choices?.[0]?.message?.content || '';
 
-          return json(r, e, { ok: false, contract_version: CONTRACT, capability: 'language', provider: e.LANGUAGE_PROVIDER || 'pollinations', model, status: 'visual_coverage_insufficient', latency_ms: Date.now() - started, request_id: requestId, result: toStoryboard(normalized), coverage: normalized.coverage, errors: normalized.errors, error: 'Storyboard failed the deterministic visual coverage/semantic quality gate.' }, 422);
+    if (response.ok && content) {
+      const parsed = parseJson(content);
+      if (String(payload?.mode || '') === 'storyboard') {
+        const duration = Number(
+          payload?.duration_seconds ||
+          payload?.durationSeconds ||
+          compactAudio(payload?.audio_analysis || payload?.audioAnalysis || payload?.audio || payload?.analysis)?.duration_seconds ||
+          0
+        );
+        const normalized = normalizeVisualBeats(parsed, duration);
+        if (!normalized.errors.length) {
+          return json(r, e, {
+            ok: true,
+            contract_version: CONTRACT,
+            capability: 'language',
+            provider: 'external',
+            model,
+            status: 'generated',
+            latency_ms: Date.now() - started,
+            request_id: requestId,
+            result: toStoryboard(normalized),
+            coverage: normalized.coverage
+          });
         }
-        return json(r, e, { ok: true, contract_version: CONTRACT, capability: 'language', provider: e.LANGUAGE_PROVIDER || 'pollinations', model, status: 'generated', latency_ms: Date.now() - started, request_id: requestId, result: parsed });
+        return json(r, e, {
+          ok: false,
+          contract_version: CONTRACT,
+          capability: 'language',
+          provider: 'external',
+          model,
+          status: 'visual_coverage_insufficient',
+          latency_ms: Date.now() - started,
+          request_id: requestId,
+          result: toStoryboard(normalized),
+          coverage: normalized.coverage,
+          errors: normalized.errors,
+          error: 'Storyboard failed the deterministic visual coverage/semantic quality gate.'
+        }, 422);
       }
-      lastError = `Language provider ${response.status}: ${String(data?.error?.message || data?.error || text).slice(0, 1000)}`;
-      if (response.status < 500) break;
-    } catch (error) { lastError = error instanceof Error ? error.message : String(error); }
-    finally { clearTimeout(timer); }
+
+      return json(r, e, {
+        ok: true,
+        contract_version: CONTRACT,
+        capability: 'language',
+        provider: 'external',
+        model,
+        status: 'generated',
+        latency_ms: Date.now() - started,
+        request_id: requestId,
+        result: parsed
+      });
+    }
+
+    const providerError = String(data?.error?.message || data?.error || text).slice(0, 1600);
+    return json(r, e, {
+      ok: false,
+      contract_version: CONTRACT,
+      capability: 'language',
+      provider: 'external',
+      model,
+      status: 'provider_error',
+      latency_ms: Date.now() - started,
+      request_id: requestId,
+      error: `External language provider ${response.status}: ${providerError}`
+    }, response.status >= 400 && response.status < 600 ? 502 : 502);
+  } catch (error) {
+    const timed = error instanceof Error && error.name === 'AbortError';
+    return json(r, e, {
+      ok: false,
+      contract_version: CONTRACT,
+      capability: 'language',
+      provider: 'external',
+      model,
+      status: timed ? 'provider_timeout' : 'provider_error',
+      latency_ms: Date.now() - started,
+      request_id: requestId,
+      error: timed ? 'External language provider timed out.' : String(error instanceof Error ? error.message : error).slice(0, 1600)
+    }, timed ? 504 : 502);
+  } finally {
+    clearTimeout(timer);
   }
-  return json(r, e, { ok: false, contract_version: CONTRACT, capability: 'language', provider: 'pollinations', status: 'provider_error', request_id: requestId, latency_ms: Date.now() - started, error: lastError }, 502);
 }
 
 export default { async fetch(r: Request, e: any) {
