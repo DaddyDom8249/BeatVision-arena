@@ -32,7 +32,7 @@ BeatVision uses these Pixazo models:
 **Stable Diffusion 3.5 is intentionally excluded from the active Arena path.** It is not configured, advertised, or called, preventing the balance-gated model from being selected accidentally.
 
 - **Shotstack Sandbox**: deterministic editing, stitching, transitions, audio and final MP4 assembly.
-- **Pollinations**: retained only for the already-proven Whisper audio analysis and language/world-direction layer, because Pixazo's current free catalog does not replace those free speech-to-text and general language functions in this architecture.
+- **Optional external intelligence/audio providers**: not bundled or selected by default. They can be connected only by explicitly supplying the required endpoint, model and secret credentials. The Arena exposes them as generic external capabilities rather than shipping a provider-specific integration.
 
 The Arena is the production execution authority for BeatVision. The main BeatVision application owns product state, approvals, UI and persistence; Arena owns provider execution, retries, durable motion jobs, media provenance and final assembly. The Arena does not assume that "free" means commercially licensed. Commercial rights, rate limits, attribution and other terms must be verified with each provider before production use.
 
@@ -78,4 +78,4 @@ Nothing here requires overwriting either existing project. Arena capabilities ar
 
 ## Current status
 
-**Free-model Pixazo-first integration foundation.** The UI supports deterministic and live modes, gateway health/capability discovery, capability-by-capability execution, request tracing, and a versioned provider contract. The active creative generation path is centralized behind one Pixazo API credential, using only Flux Schnell, SDXL, LTX and Tracks. Shotstack remains the editing/assembly layer and Pollinations remains only where its already-proven analysis/language functions are still needed.
+**Pixazo + Shotstack execution foundation.** The active creative generation path is centralized behind the Pixazo API credential, using the configured Pixazo image/video/audio capabilities. Shotstack remains the deterministic editing/assembly layer. No third-party intelligence provider is bundled or selected by default; optional external intelligence/audio integrations require explicit endpoint, model and secret configuration.
