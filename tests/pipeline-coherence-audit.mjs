@@ -22,7 +22,7 @@ for (const [operation, path] of Object.entries(requiredContracts)) {
   if (!contracts.includes(`path: "${path}"`)) throw new Error(`Contract path mismatch for ${operation}: ${path}.`);
 }
 if (!wrangler.includes('main = "src/arena-validated-entry.ts"')) throw new Error('Deployed entrypoint is not the validated pipeline entry.');
-if (!validated.includes("import arena from './arena-entry'")) throw new Error('Validated entry is not wrapping the creative pipeline.');
+if (!validated.includes("import arena from './arena-entry.ts'")) throw new Error('Validated entry is not wrapping the creative pipeline.');
 if (!validated.includes("if (storyboard && ['sceneImages', 'assemble'].includes(operation))")) throw new Error('Storyboard integrity gate is not on the image/assembly path.');
 if (!validated.includes('detectVisualReuse')) throw new Error('Semantic reuse gate is disconnected from assembly validation.');
 if (!app.includes('executeSceneBatch')) throw new Error('Browser orchestration does not batch per-scene generation.');
@@ -47,7 +47,7 @@ if (!jobs.includes("['ERROR','FAILED','CANCELLED'].includes(status)")) throw new
 if (!gateway.includes("if(path==='/v1/video/assemble')")) throw new Error('Assembly route is not connected to Shotstack.');
 if (!gateway.includes("if(path==='/v1/video/animate')")) throw new Error('Animation route is not connected to motion resilience.');
 if (!gateway.includes("path==='/v1/image/world-assets'||path==='/v1/image/scenes'")) throw new Error('Image routes are not connected to Pixazo.');
-if (!gateway.includes('return pollinations.fetch(r,e)')) throw new Error('Language/audio fallback route is disconnected.');
+if (!gateway.includes('return externalProvider.fetch(r,e)')) throw new Error('Language/audio fallback route is disconnected.');
 if (!gateway.includes('headers:{...Object.fromEntries(response.headers),...cors(r,e)}')) throw new Error('Assembly response is not normalized through the active gateway CORS policy.');
 if (!shotstack.includes('STORYBOARD_MASTER_TIMELINE')) throw new Error('Assembly does not declare storyboard-master-timeline mode.');
 if (!shotstack.includes('MEDIA_INTEGRITY_MISSING_MOTION_FOR_STORYBOARD_SCENE')) throw new Error('Assembly does not require motion for every storyboard scene.');
