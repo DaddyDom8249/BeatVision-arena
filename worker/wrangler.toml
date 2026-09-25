@@ -32,7 +32,7 @@ state = "deleted"
 # wrangler secret put SHOTSTACK_API_KEY
 
 # Optional external language/audio bindings. No third-party provider URL or model is bundled here.
-# EXTERNAL_LANGUAGE_PROVIDER_URL = "https://your-openai-compatible-endpoint/v1/chat/completions"
+# EXTERNAL_LANGUAGE_PROVIDER_URL = "https://your-language-endpoint/v1/chat/completions"
 # EXTERNAL_LANGUAGE_PROVIDER_MODEL = "your-model"
-# EXTERNAL_AUDIO_PROVIDER_URL = "https://your-openai-compatible-endpoint/v1/audio/transcriptions"
+# EXTERNAL_AUDIO_PROVIDER_URL = "https://your-audio-endpoint/v1/audio/transcriptions"
 # EXTERNAL_AUDIO_PROVIDER_MODEL = "your-transcription-model"
