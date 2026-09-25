@@ -4,9 +4,6 @@ compatibility_date = "2026-09-09"
 
 [vars]
 ALLOWED_ORIGIN = "https://daddydom8249.github.io,https://beat-vision-theta.vercel.app"
-LANGUAGE_PROVIDER_MODEL = "openai"
-LANGUAGE_PROVIDER = "pollinations"
-LANGUAGE_PROVIDER_URL = "https://gen.pollinations.ai/v1/chat/completions"
 VIDEO_PROVIDER = "pixazo"
 PIXAZO_WORLD_IMAGE_MODEL = "flux-schnell"
 PIXAZO_SCENE_IMAGE_MODEL = "sdxl"
@@ -26,10 +23,16 @@ state = "deleted"
 
 # Free Pixazo models used by the active Arena creative path only.
 # Shotstack Sandbox remains the deterministic assembly layer.
-# Pollinations remains for Whisper/language/world-direction calls.
 # Secrets expected by the worker:
 # wrangler secret put GATEWAY_TOKEN
-# wrangler secret put LANGUAGE_PROVIDER_TOKEN
-# wrangler secret put AUDIO_PROVIDER_TOKEN
+# Optional external language/audio providers are configured only when explicitly supplied.
+# wrangler secret put EXTERNAL_LANGUAGE_PROVIDER_TOKEN
+# wrangler secret put EXTERNAL_AUDIO_PROVIDER_TOKEN
 # wrangler secret put PIXAZO_API_KEY
 # wrangler secret put SHOTSTACK_API_KEY
+
+# Optional external language/audio bindings. No third-party provider URL or model is bundled here.
+# EXTERNAL_LANGUAGE_PROVIDER_URL = "https://your-openai-compatible-endpoint/v1/chat/completions"
+# EXTERNAL_LANGUAGE_PROVIDER_MODEL = "your-model"
+# EXTERNAL_AUDIO_PROVIDER_URL = "https://your-openai-compatible-endpoint/v1/audio/transcriptions"
+# EXTERNAL_AUDIO_PROVIDER_MODEL = "your-transcription-model"
