@@ -3,13 +3,13 @@ import fs from 'node:fs';
 const required=[
   'app.js','provider-contracts.js','log-guard.js','motion-bridge.js','animation-bridge.js','worker/wrangler.toml',
   'worker/src/arena-entry.ts','worker/src/arena-validated-entry.ts','worker/src/visual-beat-engine.ts','worker/src/pixazo-media-gateway-fixed.ts',
-  'worker/src/pollinations-gateway-v2.ts','worker/src/shotstack-gateway.ts','worker/src/video-fallback-gateway.ts',
+  'worker/src/external-provider-gateway.ts','worker/src/shotstack-gateway.ts','worker/src/video-fallback-gateway.ts',
   'worker/src/animation-jobs.ts','worker/src/render-integrity.ts','worker/src/skills.ts','worker/src/index.ts','worker/src/storyboard-validator.ts'
 ];
 for(const file of required)if(!fs.existsSync(file))throw new Error(`Missing required file: ${file}`);
 const read=file=>fs.readFileSync(file,'utf8');
 const active=required.map(read).join('\n');
-for(const banned of ['huggingface','HF_API_TOKEN','sd3.5','stable-diffusion-3.5'])if(active.toLowerCase().includes(banned.toLowerCase()))throw new Error(`Forbidden active-path reference found: ${banned}`);
+for(const banned of ['huggingface','HF_API_TOKEN','sd3.5','stable-diffusion-3.5','pollinations','gemini'])if(active.toLowerCase().includes(banned.toLowerCase()))throw new Error(`Forbidden active-path reference found: ${banned}`);
 const contracts=read('provider-contracts.js');
 for(const operation of ['analyzeAudio','revealWorld','worldAssets','storyboard','sceneImages','animate','assemble','generateMusic','storeAsset'])if(!contracts.includes(operation))throw new Error(`Missing contract operation: ${operation}`);
 const app=read('app.js');
@@ -22,7 +22,7 @@ if(!bridge.includes('storyboard:state.storyboard,motion:state.motion'))throw new
 const beatEngine=read('worker/src/visual-beat-engine.ts');
 for(const token of ['VisualBeat','compactAudio','visualBeatSystemPrompt','normalizeVisualBeats','coverage_ratio','semantic_grounding_failures','semantic_duplicate_rate','unexplained_reuse','reusePolicy'])if(!beatEngine.includes(token))throw new Error(`Visual beat engine missing ${token}.`);
 if(!beatEngine.includes('lyricMeaning')||!beatEngine.includes('narrativePurpose')||!beatEngine.includes('characterState')||!beatEngine.includes('visualContinuityRequirements'))throw new Error('Visual beat metadata is incomplete.');
-const language=read('worker/src/pollinations-gateway-v2.ts');
+const language=read('worker/src/external-provider-gateway.ts');
 if(!language.includes("import { compactAudio, normalizeVisualBeats, toStoryboard, visualBeatSystemPrompt } from './visual-beat-engine';"))throw new Error('Storyboard gateway is not using the visual beat engine.');
 if(!language.includes('visual_coverage_insufficient'))throw new Error('Storyboard coverage quality gate is missing.');
 if(!language.includes('BeatVision quality gate'))throw new Error('Storyboard failure must explain why reuse cannot silently fill gaps.');
