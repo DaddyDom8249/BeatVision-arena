@@ -190,6 +190,64 @@ async function languageRequest(r: Request, e: any, body: any, requestId: string)
       const duration = Number(compactAudio(clean.audio)?.duration_seconds || 0);
       const normalized = normalizeVisualBeats(parsed, duration);
       if (normalized.errors.length) {
+          if (normalized.errors.some((x: string) => x === 'No visual beats were produced.')) {
+            const repairPrompt = [
+              'Repair the BeatVision storyboard request below.',
+              'Return ONLY one valid JSON object with exactly these top-level keys: sections, visual_beats, coverage_notes.',
+              'visual_beats MUST be a non-empty JSON array.',
+              'Every beat MUST have numeric startTime and endTime with endTime greater than startTime.',
+              'Use the supplied song duration when present. Cover the complete timeline from 0 to duration.',
+              'Do not return markdown, prose, null, or an empty array.',
+              'Do not invent lyrics. Instrumental intervals must be described as non-lyrical.',
+              'Song duration: ' + (duration > 0 ? String(duration) : 'not supplied') + '.',
+              'Original storyboard request:',
+              JSON.stringify(clean)
+            ].join('\\n');
+            try {
+              const repairResponse = await fetch(url, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`,
+                  'X-BeatVision-Request': requestId
+                },
+                body: JSON.stringify({
+                  model,
+                  messages: [
+                    { role: 'system', content: 'You are repairing a BeatVision storyboard. Output ONLY valid JSON matching the requested structure.' },
+                    { role: 'user', content: repairPrompt }
+                  ],
+                  temperature: 0.2,
+                  response_format: { type: 'json_object' }
+                }),
+                signal: AbortSignal.timeout(LANGUAGE_TIMEOUT_MS)
+              });
+              const repairText = await repairResponse.text();
+              let repairData: any;
+              try { repairData = JSON.parse(repairText); } catch { repairData = { raw: repairText.slice(0, 20000) }; }
+              const repairContent = repairData?.choices?.[0]?.message?.content || '';
+              if (repairResponse.ok && repairContent) {
+                const repaired = parseJson(repairContent);
+                const repairedNormalized = normalizeVisualBeats(repaired, duration);
+                if (!repairedNormalized.errors.length) {
+                  return json(r, e, {
+                    ok: true,
+                    contract_version: CONTRACT_VERSION,
+                    capability: 'language',
+                    provider: 'external',
+                    model,
+                    status: 'generated_repaired',
+                    latency_ms: Date.now() - started,
+                    request_id: requestId,
+                    result: toStoryboard(repairedNormalized),
+                    coverage: repairedNormalized.coverage
+                  });
+                }
+              }
+            } catch {
+              // Preserve the deterministic quality-gate failure if repair also fails.
+            }
+          }
         return json(r, e, {
           ok: false,
           contract_version: CONTRACT_VERSION,
