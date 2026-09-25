@@ -7,12 +7,12 @@ Core promise:
 **Every Song Has a World. BeatVision Reveals It.**
 
 ## Canonical pipeline
-SONG → GEMINI UNDERSTANDS → WORLD → CHARACTER BIBLE → ENVIRONMENT BIBLE → STORY → STORYBOARD → APPROVED SCENE IMAGE → CHARACTER PERFORMANCE → CAMERA MOVEMENT → ENVIRONMENT MOTION → AUDIO/LIP SYNC → TIMELINE → CINEMATIC MUSIC VIDEO
+SONG → CREATIVE INTELLIGENCE UNDERSTANDS → WORLD → CHARACTER BIBLE → ENVIRONMENT BIBLE → STORY → STORYBOARD → APPROVED SCENE IMAGE → CHARACTER PERFORMANCE → CAMERA MOVEMENT → ENVIRONMENT MOTION → AUDIO/LIP SYNC → TIMELINE → CINEMATIC MUSIC VIDEO
 
 ## Creative intelligence ownership
 BeatVision owns the creative intent and continuity. AI/video providers are replaceable execution engines.
 
-Gemini/creative intelligence must understand and carry forward:
+Creative intelligence must understand and carry forward:
 - song identity, lyrics, mood, themes, emotional arc, musical sections and timing
 - World Report and approved visual language
 - Character Bible and identity locks
