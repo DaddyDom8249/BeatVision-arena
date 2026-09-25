@@ -35,6 +35,9 @@ export default {
           pixazo_api_key: Boolean(String(env.PIXAZO_API_KEY || '').trim()),
           language_provider_token: Boolean(String(env.LANGUAGE_PROVIDER_TOKEN || '').trim()),
           shotstack_api_key: Boolean(String(env.SHOTSTACK_API_KEY || '').trim()),
+          language_provider: String(env.LANGUAGE_PROVIDER || 'unset').trim().toLowerCase(),
+          language_provider_model: String(env.LANGUAGE_PROVIDER_MODEL || 'unset').trim(),
+          language_provider_url: String(env.LANGUAGE_PROVIDER_URL || 'unset').trim(),
         },
       });
     }
