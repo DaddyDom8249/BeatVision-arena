@@ -33,11 +33,11 @@ export default {
         configuration: {
           gateway_token: Boolean(token),
           pixazo_api_key: Boolean(String(env.PIXAZO_API_KEY || '').trim()),
-          language_provider_token: Boolean(String(env.LANGUAGE_PROVIDER_TOKEN || '').trim()),
+          external_language_provider_token: Boolean(String(env.EXTERNAL_LANGUAGE_PROVIDER_TOKEN || '').trim()),
           shotstack_api_key: Boolean(String(env.SHOTSTACK_API_KEY || '').trim()),
-          language_provider: String(env.LANGUAGE_PROVIDER || 'unset').trim().toLowerCase(),
-          language_provider_model: String(env.LANGUAGE_PROVIDER_MODEL || 'unset').trim(),
-          language_provider_url: String(env.LANGUAGE_PROVIDER_URL || 'unset').trim(),
+          external_language_provider: 'external',
+          external_language_provider_model: String(env.EXTERNAL_LANGUAGE_PROVIDER_MODEL || 'unset').trim(),
+          external_language_provider_url: Boolean(String(env.EXTERNAL_LANGUAGE_PROVIDER_URL || '').trim()),
         },
       });
     }
