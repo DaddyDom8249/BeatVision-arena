@@ -260,7 +260,7 @@ async function languageRequest(r: Request, e: any, body: any, requestId: string)
           result: toStoryboard(normalized),
           coverage: normalized.coverage,
           errors: normalized.errors,
-          error: 'Storyboard failed the deterministic visual coverage/semantic quality gate.'
+          error: 'Storyboard failed the BeatVision quality gate for visual coverage and semantic grounding.'
         }, 422);
       }
       return json(r, e, {
