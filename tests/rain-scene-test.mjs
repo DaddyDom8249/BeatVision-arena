@@ -43,6 +43,8 @@ const body = {
         id: "rain-scene-test-001",
         beatId: "rain-scene-test-001",
         durationSeconds: 31,
+        startTime: 0,
+        endTime: 31,
         visualPrompt: scenePrompt,
         prompt: scenePrompt,
         negativePrompt,
