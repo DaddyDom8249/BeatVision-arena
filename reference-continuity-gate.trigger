@@ -1,1 +1,1 @@
-One-shot trigger for the YouTube approved-master reference-continuity gate. Formatting fix applied.
+One-shot trigger for the YouTube approved-master reference-continuity gate. Client route requires no gateway token.
