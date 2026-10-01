@@ -80,7 +80,7 @@ jobs:
           test -s gate-output/continuation.png
 
       - name: Upload reference-continuity gate artifact
-        if: always() && (contains(github.event.head_commit.modified, 'reference-continuity-gate.trigger') || contains(github.event.head_commit.added, 'reference-continuity-gate.trigger'))
+        if: always() && github.event.head_commit.message == 'Retry YouTube reference continuity gate'
         uses: actions/upload-artifact@v4
         with:
           name: youtube-reference-continuity-gate-${{ github.run_id }}
