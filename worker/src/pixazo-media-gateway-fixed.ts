@@ -119,7 +119,7 @@ async function img(key: string, model: 'flux-schnell' | 'sdxl', promptText: stri
     width: aspect === 'wide' ? 1344 : 1024,
     num_steps: 20,
     guidance_scale: 5,
-    ...(referenceImageUrl ? { image: referenceImageUrl, prompt_strength: 0.55 } : {})
+    ...(referenceImageUrl ? { image: referenceImageUrl, prompt_strength: 0.25 } : {})
   }, model);
   const url = media(data);
   if (!url) throw new Error(`Pixazo ${model} returned no image URL.`);
