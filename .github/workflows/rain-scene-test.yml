@@ -31,7 +31,7 @@ jobs:
             if (!v || typeof v !== "object" || seen.has(v)) return null;
             seen.add(v);
             for (const [k,val] of Object.entries(v)) {
-              if (typeof val === "string" && /^https?:\\/\\//.test(val) && /image|url|output|result|asset/i.test(k)) return val;
+              if (typeof val === "string" && (val.startsWith("http://") || val.startsWith("https://")) && /image|url|output|result|asset/i.test(k)) return val;
             }
             for (const val of Object.values(v)) {
               const z = find(val);
