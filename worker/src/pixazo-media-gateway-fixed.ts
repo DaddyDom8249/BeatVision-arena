@@ -100,7 +100,7 @@ async function wait(key: string, requestId: string, model: string) {
   throw new Error(`Pixazo ${model} job timed out after ${LTX_TIMEOUT_MS / 1000} seconds.`);
 }
 
-async function img(key: string, model: 'flux-schnell' | 'sdxl', promptText: string, aspect: 'square' | 'wide' = 'square') {
+async function img(key: string, model: 'flux-schnell' | 'sdxl', promptText: string, aspect: 'square' | 'wide' = 'square', referenceImageUrl?: string) {
   if (model === 'flux-schnell') {
     const data = await call('/flux-1-schnell/v1/getData', key, {
       prompt: clip(promptText, 2048),
@@ -118,7 +118,8 @@ async function img(key: string, model: 'flux-schnell' | 'sdxl', promptText: stri
     height: aspect === 'wide' ? 768 : 1024,
     width: aspect === 'wide' ? 1344 : 1024,
     num_steps: 20,
-    guidance_scale: 5
+    guidance_scale: 5,
+    ...(referenceImageUrl ? { image: referenceImageUrl, prompt_strength: 0.55 } : {})
   }, model);
   const url = media(data);
   if (!url) throw new Error(`Pixazo ${model} returned no image URL.`);
@@ -286,7 +287,8 @@ export default {
         const images = [];
         for (let i = 0; i < scenes.length; i += 1) {
           const scene = scenes[i];
-          const imageUrl = await labeled(`scene ${i + 1} / SDXL Free`, () => img(key, 'sdxl', worldPrompt(payload, scene), 'wide'));
+          const referenceImageUrl = scene?.canonical_master_asset_url || scene?.referenceImageUrl || scene?.reference_image_url || null;
+          const imageUrl = await labeled(`scene ${i + 1} / SDXL Free`, () => img(key, 'sdxl', worldPrompt(payload, scene), 'wide', referenceImageUrl));
           images.push({ scene: Number(scene.scene || i + 1), status: 'generated', image_url: imageUrl });
         }
         return json(r, e, {
