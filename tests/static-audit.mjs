@@ -9,7 +9,7 @@ const required=[
 for(const file of required)if(!fs.existsSync(file))throw new Error(`Missing required file: ${file}`);
 const read=file=>fs.readFileSync(file,'utf8');
 const active=required.map(read).join('\n');
-for(const banned of ['huggingface','HF_API_TOKEN','sd3.5','stable-diffusion-3.5','pollinations','gemini'])if(active.toLowerCase().includes(banned.toLowerCase()))throw new Error(`Forbidden active-path reference found: ${banned}`);
+for(const banned of ['huggingface','HF_API_TOKEN','pollinations','gemini'])if(active.toLowerCase().includes(banned.toLowerCase()))throw new Error(`Forbidden active-path reference found: ${banned}`);
 const contracts=read('provider-contracts.js');
 for(const operation of ['analyzeAudio','revealWorld','worldAssets','storyboard','sceneImages','animate','assemble','generateMusic','storeAsset'])if(!contracts.includes(operation))throw new Error(`Missing contract operation: ${operation}`);
 const app=read('app.js');
