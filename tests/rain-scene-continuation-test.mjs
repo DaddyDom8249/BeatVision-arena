@@ -1,4 +1,5 @@
-// Uses the current deployed Arena worker and optional SDXL reference-image path.\nconst endpoint = (process.env.BEATVISION_GATEWAY || "https://beatvision-provider-arena.richardcranium466.workers.dev") + "/v1/client/image/scene";
+// Uses the current deployed Arena worker and optional SDXL reference-image path.
+const endpoint = (process.env.BEATVISION_GATEWAY || "https://beatvision-provider-arena.richardcranium466.workers.dev") + "/v1/client/image/scene";
 
 const canonicalMaster = {
   assetId: "rain-scene-master-001",
