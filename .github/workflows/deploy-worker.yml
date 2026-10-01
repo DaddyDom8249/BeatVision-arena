@@ -64,7 +64,7 @@ jobs:
             }
           }
           JSON
-          HTTP_CODE=$(curl -sS -o gate-output/response.json -w "%{http_code}" -X POST "https://beatvision-provider-arena.richardcranium466.workers.dev/v1/client/image/reference-continuation" -H "Authorization: Bearer $GATEWAY_TOKEN" -H "Content-Type: application/json" -H "X-BeatVision-Contract: 1.1" -H "X-BeatVision-Request: youtube-reference-continuity-${GITHUB_RUN_ID}" --data-binary @gate-request.json)
+          HTTP_CODE=$(curl -sS -o gate-output/response.json -w "%{http_code}" -X POST "https://beatvision-provider-arena.richardcranium466.workers.dev/v1/client/image/reference-continuation" -H "Content-Type: application/json" -H "X-BeatVision-Contract: 1.1" -H "X-BeatVision-Request: youtube-reference-continuity-${GITHUB_RUN_ID}" --data-binary @gate-request.json)
           cat gate-output/response.json
           if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
             echo "Reference-continuity request failed with HTTP $HTTP_CODE"
