@@ -512,7 +512,13 @@ export default { async fetch(r: Request, e: any) {
   if (r.method === 'OPTIONS') { const origin = r.headers.get('Origin') || ''; const allowed = String(e.ALLOWED_ORIGIN || '').split(',').map((x: string) => x.trim()).filter(Boolean); if (!origin || !allowed.includes(origin)) return new Response(null, { status: 403, headers: cors(r, e) }); return new Response(null, { status: 204, headers: cors(r, e) }); }
   const url = new URL(r.url), path = url.pathname, requestId = r.headers.get('X-BeatVision-Request') || crypto.randomUUID();
   if (path === '/' || path === '/health') return pixazo.fetch(r, e);
-  if (path === '/v1/client/image/reference-continuation') {\n    if (r.method !== 'POST') return json(r, e, { ok: false, error: 'Method Not Allowed', request_id: requestId }, 405);\n    let body: any; try { body = await r.json(); } catch { return json(r, e, { ok: false, error: 'Invalid JSON request body.', request_id: requestId }, 400); }\n    if (body?.contract_version && body.contract_version !== CONTRACT) return json(r, e, { ok: false, error: 'Expected BeatVision contract 1.1.', request_id: requestId }, 400);\n    return youtubeReferenceContinuation(r, e, body, requestId);\n  }\n  if (path === '/v1/client/image/scene') {
+  if (path === '/v1/client/image/reference-continuation') {
+    if (r.method !== 'POST') return json(r, e, { ok: false, error: 'Method Not Allowed', request_id: requestId }, 405);
+    let body: any; try { body = await r.json(); } catch { return json(r, e, { ok: false, error: 'Invalid JSON request body.', request_id: requestId }, 400); }
+    if (body?.contract_version && body.contract_version !== CONTRACT) return json(r, e, { ok: false, error: 'Expected BeatVision contract 1.1.', request_id: requestId }, 400);
+    return youtubeReferenceContinuation(r, e, body, requestId);
+  }
+  if (path === '/v1/client/image/scene') {
     if (r.method !== 'POST') return json(r, e, { ok: false, error: 'Method Not Allowed' }, 405);
     let clientBody: any; try { clientBody = await r.json(); } catch { return json(r, e, { ok: false, error: 'Invalid JSON request body.', request_id: requestId }, 400); }
     if (clientBody?.scene && !clientBody?.payload?.storyboard?.scenes) {
