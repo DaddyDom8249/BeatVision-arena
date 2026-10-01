@@ -46,7 +46,6 @@ jobs:
       - name: Run one YouTube reference-continuity gate
         if: github.event.head_commit.message == 'Retry YouTube reference continuity gate'
         env:
-          GATEWAY_TOKEN: ${{ secrets.GATEWAY_TOKEN }}
           REFERENCE_IMAGE_URL: https://pub-582b7213209642b9b995c96c95a30381.r2.dev/sdxl/prompt-133708738-1790839798765-439420.png
         run: |
           set -u
@@ -65,7 +64,7 @@ jobs:
             }
           }
           JSON
-          HTTP_CODE=$(curl -sS -o gate-output/response.json -w "%{http_code}" -X POST "https://beatvision-provider-arena.richardcranium466.workers.dev/v1/image/scene" -H "Authorization: Bearer $GATEWAY_TOKEN" -H "Content-Type: application/json" -H "X-BeatVision-Contract: 1.1" -H "X-BeatVision-Request: youtube-reference-continuity-${GITHUB_RUN_ID}" --data-binary @gate-request.json)
+          HTTP_CODE=$(curl -sS -o gate-output/response.json -w "%{http_code}" -X POST "https://beatvision-provider-arena.richardcranium466.workers.dev/v1/client/image/reference-continuation" -H "Authorization: Bearer $GATEWAY_TOKEN" -H "Content-Type: application/json" -H "X-BeatVision-Contract: 1.1" -H "X-BeatVision-Request: youtube-reference-continuity-${GITHUB_RUN_ID}" --data-binary @gate-request.json)
           cat gate-output/response.json
           if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
             echo "Reference-continuity request failed with HTTP $HTTP_CODE"
