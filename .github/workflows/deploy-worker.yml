@@ -44,7 +44,7 @@ jobs:
         run: wrangler deploy
 
       - name: Run one YouTube reference-continuity gate
-        if: contains(github.event.head_commit.modified, 'reference-continuity-gate.trigger') || contains(github.event.head_commit.added, 'reference-continuity-gate.trigger')
+        if: github.event.head_commit.message == 'Retry YouTube reference continuity gate'
         env:
           GATEWAY_TOKEN: ${{ secrets.GATEWAY_TOKEN }}
           REFERENCE_IMAGE_URL: https://pub-582b7213209642b9b995c96c95a30381.r2.dev/sdxl/prompt-133708738-1790839798765-439420.png
