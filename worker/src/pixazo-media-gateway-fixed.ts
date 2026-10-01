@@ -277,7 +277,7 @@ export default {
 
       if (operation === 'referenceContinuation') {
         const referenceImageUrl = String(payload?.reference_image_url || '').trim();
-        if (!/^https?:\\/\\//i.test(referenceImageUrl)) return json(r, e, {
+        if (!/^https?:\/\//i.test(referenceImageUrl)) return json(r, e, {
           ok: false,
           contract_version: CONTRACT,
           capability: 'image',
