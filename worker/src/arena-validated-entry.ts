@@ -43,6 +43,52 @@ export default {
     }
 
     // Narrow client image endpoint: allows single scene generation without exposing master GATEWAY_TOKEN
+    if (path === '/v1/client/image/reference-continuation') {
+      if (r.method !== 'POST') {
+        return json(r, { ok: false, error: 'Method Not Allowed. Reference-continuation endpoint requires POST.' }, 405);
+      }
+
+      const clientIp = r.headers.get('CF-Connecting-IP') || r.headers.get('X-Forwarded-For') || 'client';
+      const now = Date.now();
+      const lastRequest = clientRateLimit.get(`reference:${clientIp}`) || 0;
+      if (now - lastRequest < RATE_LIMIT_WINDOW_MS) {
+        const retryAfter = Math.ceil((RATE_LIMIT_WINDOW_MS - (now - lastRequest)) / 1000);
+        return json(r, {
+          ok: false,
+          status: 'rate_limited',
+          error: 'Rate limit exceeded: 1 reference-continuity request per 10 seconds.',
+          retry_after_seconds: retryAfter
+        }, 429);
+      }
+      clientRateLimit.set(`reference:${clientIp}`, now);
+
+      const contractHeader = r.headers.get('X-BeatVision-Contract');
+      if (contractHeader && contractHeader !== '1.1') {
+        return json(r, { ok: false, error: 'Expected BeatVision contract 1.1.' }, 400);
+      }
+
+      const pixazoKey = String(env.PIXAZO_API_KEY || '').trim();
+      if (!pixazoKey) {
+        return json(r, { ok: false, error: 'Image provider is not configured on gateway.' }, 503);
+      }
+
+      let body: any = null;
+      try { body = await r.json(); } catch { return json(r, { ok: false, error: 'Invalid JSON body.' }, 400); }
+      if (body?.contract_version && body.contract_version !== '1.1') {
+        return json(r, { ok: false, error: 'Expected BeatVision contract 1.1.' }, 400);
+      }
+      if (body?.operation && body.operation !== 'referenceContinuation') {
+        return json(r, { ok: false, error: 'Invalid operation for reference-continuation endpoint.' }, 400);
+      }
+      body.contract_version = '1.1';
+      body.operation = 'referenceContinuation';
+      return arena.fetch(new Request(r.url, {
+        method: 'POST',
+        headers: new Headers(r.headers),
+        body: JSON.stringify(body)
+      }), env, ctx);
+    }
+
     if (path === '/v1/client/image/scene') {
       if (r.method !== 'POST') {
         return json(r, { ok: false, error: 'Method Not Allowed. Client image endpoint requires POST.' }, 405);
