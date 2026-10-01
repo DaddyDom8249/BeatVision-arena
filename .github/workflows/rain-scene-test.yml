@@ -16,6 +16,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Allow provider deployment to settle
+        run: sleep 45
       - name: Generate rain scene through Arena
         run: node tests/rain-scene-test.mjs > rain-scene-response.json
       - name: Extract image URL
@@ -26,8 +28,7 @@ jobs:
           const r = x.response;
           const seen = new Set();
           function find(v) {
-            if (!v || typeof v !== "object") return null;
-            if (seen.has(v)) return null;
+            if (!v || typeof v !== "object" || seen.has(v)) return null;
             seen.add(v);
             for (const [k,val] of Object.entries(v)) {
               if (typeof val === "string" && /^https?:\\/\\//.test(val) && /image|url|output|result|asset/i.test(k)) return val;
