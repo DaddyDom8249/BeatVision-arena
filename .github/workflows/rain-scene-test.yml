@@ -1,0 +1,59 @@
+name: Rain Scene Arena Test
+
+on:
+  push:
+    paths:
+      - "tests/rain-scene-test.mjs"
+      - ".github/workflows/rain-scene-test.yml"
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Generate rain scene through Arena
+        run: node tests/rain-scene-test.mjs > rain-scene-response.json
+      - name: Extract image URL
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const x = JSON.parse(fs.readFileSync("rain-scene-response.json","utf8"));
+          const r = x.response;
+          const seen = new Set();
+          function find(v) {
+            if (!v || typeof v !== "object") return null;
+            if (seen.has(v)) return null;
+            seen.add(v);
+            for (const [k,val] of Object.entries(v)) {
+              if (typeof val === "string" && /^https?:\\/\\//.test(val) && /image|url|output|result|asset/i.test(k)) return val;
+            }
+            for (const val of Object.values(v)) {
+              const z = find(val);
+              if (z) return z;
+            }
+            return null;
+          }
+          const url = find(r);
+          fs.writeFileSync("rain-scene-image-url.txt", url || "NO_IMAGE_URL_RETURNED");
+          if (!url) process.exit(2);
+          console.log(url);
+          NODE
+      - name: Download generated image
+        run: |
+          URL=$(cat rain-scene-image-url.txt)
+          curl --fail --location --retry 3 --max-time 180 "$URL" -o rain-scene-test.png
+          file rain-scene-test.png
+      - name: Upload Arena result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arena-rain-scene-test
+          path: |
+            rain-scene-response.json
+            rain-scene-image-url.txt
+            rain-scene-test.png
