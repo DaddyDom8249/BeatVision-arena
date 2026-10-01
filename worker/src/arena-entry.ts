@@ -204,6 +204,91 @@ async function resilientSceneImages(r: Request, e: any, body: any, requestId: st
   try { for (let i = 0; i < scenes.length; i += 1) { const sceneNumber = Number(scenes[i]?.scene || i + 1); const generated = await generateSceneImage(key, scenePrompt(payload, scenes[i], i, scenes.length), sceneNumber); images.push({ scene: sceneNumber, beatId: scenes[i]?.beatId || null, status: 'generated', image_url: generated.image_url, model: generated.model }); models.add(generated.model); } return json(r, e, { ok: true, contract_version: CONTRACT, capability: 'image', provider: 'pixazo', model: Array.from(models).join('+'), request_id: requestId, latency_ms: Date.now() - started, result: { images, models_used: Array.from(models), scene_count: images.length, free_only: true } }); } catch (error) { const rawError = String(error instanceof Error ? error.message : error); const sanitized = key ? rawError.split(key).join('[REDACTED]') : rawError; return json(r, e, { ok: false, contract_version: CONTRACT, capability: 'image', provider: 'pixazo', status: 'provider_error', request_id: requestId, latency_ms: Date.now() - started, completed_scene_count: images.length, completed_scenes: images.map(image => image.scene), error: sanitized.slice(0, 2200) }, 502); }
 }
 
+const APPROVED_YOUTUBE_REFERENCE = 'https://pub-582b7213209642b9b995c96c95a30381.r2.dev/sdxl/prompt-133708738-1790839798765-439420.png';
+
+async function youtubeReferenceContinuation(r: Request, e: any, body: any, requestId: string) {
+  const key = String(e.PIXAZO_API_KEY || '').trim();
+  if (!key) return json(r, e, { ok: false, error: 'PIXAZO_API_KEY is not configured.', request_id: requestId }, 503);
+  const referenceImageUrl = String(body?.payload?.reference_image_url || '').trim();
+  if (referenceImageUrl !== APPROVED_YOUTUBE_REFERENCE) {
+    return json(r, e, {
+      ok: false,
+      contract_version: CONTRACT,
+      capability: 'image',
+      provider: 'pixazo',
+      status: 'invalid_input',
+      request_id: requestId,
+      error: 'This temporary YouTube continuity gate accepts only the approved canonical reference image.'
+    }, 400);
+  }
+
+  const started = Date.now();
+  const prompt = [
+    'Photorealistic cinematic nighttime rain scene viewed through a window.',
+    'Continue the approved reference image as the same visual world.',
+    'Preserve the original camera viewpoint, framing, window geometry, lighting, exposure, atmosphere, rainfall direction, and overall composition.',
+    'Make only subtle natural temporal variation in individual raindrops and distant atmospheric details.',
+    'No people, faces, animals, vehicles, prominent buildings, text, logos, watermarks, UI, purple, magenta, neon, geometric rain, repeating patterns, or composition changes.'
+  ].join('\\n');
+  const negativePrompt = [
+    'purple lighting', 'magenta', 'neon', 'geometric lines', 'vertical bars',
+    'perfectly parallel lines', 'grid', 'barcode', 'repeating streaks',
+    'symmetrical rain', 'artificial particle pattern', 'cartoon', 'anime',
+    'illustration', 'fantasy', 'CGI appearance', 'oversaturated colors',
+    'bright daytime', 'lightning', 'text', 'logo', 'watermark'
+  ].join(', ');
+
+  try {
+    const data = await pixazoPost('/sd3-5/v1/r-sd-3-5-large', key, {
+      prompt,
+      negative_prompt: negativePrompt,
+      image: referenceImageUrl,
+      cfg: 4.5,
+      steps: 40,
+      prompt_strength: 0.25,
+      output_format: 'png',
+      output_quality: 100
+    });
+    const directUrl = media(data);
+    const providerRequestId = requestIdFrom(data);
+    const imageUrl = directUrl || (providerRequestId ? await pixazoStatus(key, providerRequestId, 'sd3-5-large') : null);
+    if (!imageUrl) throw new Error('Pixazo SD3.5 image-to-image returned no image URL or request ID.');
+
+    return json(r, e, {
+      ok: true,
+      contract_version: CONTRACT,
+      capability: 'image',
+      provider: 'pixazo',
+      model: 'sd3-5-large',
+      status: 'generated',
+      free_only: true,
+      request_id: requestId,
+      latency_ms: Date.now() - started,
+      reference_image_url: referenceImageUrl,
+      reference_mode: 'image-to-image',
+      prompt_strength: 0.25,
+      pixazo_request_id: providerRequestId,
+      result: {
+        image_url: imageUrl,
+        source: 'Pixazo Stable Diffusion 3.5 image-to-image',
+        models_used: ['sd3-5-large']
+      }
+    });
+  } catch (error) {
+    return json(r, e, {
+      ok: false,
+      contract_version: CONTRACT,
+      capability: 'image',
+      provider: 'pixazo',
+      model: 'sd3-5-large',
+      status: 'provider_error',
+      request_id: requestId,
+      latency_ms: Date.now() - started,
+      error: String(error instanceof Error ? error.message : error).slice(0, 2200)
+    }, 502);
+  }
+}
+
 async function storyboardWithRenderSafeBeats(r: Request, e: any, body: any) {
   const upstream = await pixazo.fetch(new Request(r.url, { method: 'POST', headers: new Headers(r.headers), body: JSON.stringify(body) }), e); if (!upstream.ok) return upstream;
   let data: any; try { data = await upstream.clone().json(); } catch { return upstream; }
@@ -427,7 +512,7 @@ export default { async fetch(r: Request, e: any) {
   if (r.method === 'OPTIONS') { const origin = r.headers.get('Origin') || ''; const allowed = String(e.ALLOWED_ORIGIN || '').split(',').map((x: string) => x.trim()).filter(Boolean); if (!origin || !allowed.includes(origin)) return new Response(null, { status: 403, headers: cors(r, e) }); return new Response(null, { status: 204, headers: cors(r, e) }); }
   const url = new URL(r.url), path = url.pathname, requestId = r.headers.get('X-BeatVision-Request') || crypto.randomUUID();
   if (path === '/' || path === '/health') return pixazo.fetch(r, e);
-  if (path === '/v1/client/image/scene') {
+  if (path === '/v1/client/image/reference-continuation') {\n    if (r.method !== 'POST') return json(r, e, { ok: false, error: 'Method Not Allowed', request_id: requestId }, 405);\n    let body: any; try { body = await r.json(); } catch { return json(r, e, { ok: false, error: 'Invalid JSON request body.', request_id: requestId }, 400); }\n    if (body?.contract_version && body.contract_version !== CONTRACT) return json(r, e, { ok: false, error: 'Expected BeatVision contract 1.1.', request_id: requestId }, 400);\n    return youtubeReferenceContinuation(r, e, body, requestId);\n  }\n  if (path === '/v1/client/image/scene') {
     if (r.method !== 'POST') return json(r, e, { ok: false, error: 'Method Not Allowed' }, 405);
     let clientBody: any; try { clientBody = await r.json(); } catch { return json(r, e, { ok: false, error: 'Invalid JSON request body.', request_id: requestId }, 400); }
     if (clientBody?.scene && !clientBody?.payload?.storyboard?.scenes) {
