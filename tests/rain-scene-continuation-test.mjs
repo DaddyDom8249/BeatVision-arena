@@ -1,7 +1,8 @@
 // Uses the current deployed Arena worker and optional SDXL reference-image path.
 const endpoint = (process.env.BEATVISION_GATEWAY || "https://beatvision-provider-arena.richardcranium466.workers.dev") + "/v1/client/image/scene";
 
-// Continuation regression: lower reference strength is intentionally locked by the worker.\nconst canonicalMaster = {
+// Continuation regression: lower reference strength is intentionally locked by the worker.
+const canonicalMaster = {
   assetId: "rain-scene-master-001",
   source: "Arena/Pixazo SDXL",
   imageUrl: "https://pub-582b7213209642b9b995c96c95a30381.r2.dev/sdxl/prompt-133708738-1790839798765-439420.png",
