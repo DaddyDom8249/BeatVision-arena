@@ -207,86 +207,16 @@ async function resilientSceneImages(r: Request, e: any, body: any, requestId: st
 const APPROVED_YOUTUBE_REFERENCE = 'https://pub-582b7213209642b9b995c96c95a30381.r2.dev/sdxl/prompt-133708738-1790839798765-439420.png';
 
 async function youtubeReferenceContinuation(r: Request, e: any, body: any, requestId: string) {
-  const key = String(e.PIXAZO_API_KEY || '').trim();
-  if (!key) return json(r, e, { ok: false, error: 'PIXAZO_API_KEY is not configured.', request_id: requestId }, 503);
-  const referenceImageUrl = String(body?.payload?.reference_image_url || '').trim();
-  if (referenceImageUrl !== APPROVED_YOUTUBE_REFERENCE) {
-    return json(r, e, {
-      ok: false,
-      contract_version: CONTRACT,
-      capability: 'image',
-      provider: 'pixazo',
-      status: 'invalid_input',
-      request_id: requestId,
-      error: 'This temporary YouTube continuity gate accepts only the approved canonical reference image.'
-    }, 400);
-  }
-
-  const started = Date.now();
-  const prompt = [
-    'Photorealistic cinematic nighttime rain scene viewed through a window.',
-    'Continue the approved reference image as the same visual world.',
-    'Preserve the original camera viewpoint, framing, window geometry, lighting, exposure, atmosphere, rainfall direction, and overall composition.',
-    'Make only subtle natural temporal variation in individual raindrops and distant atmospheric details.',
-    'No people, faces, animals, vehicles, prominent buildings, text, logos, watermarks, UI, purple, magenta, neon, geometric rain, repeating patterns, or composition changes.'
-  ].join('\\n');
-  const negativePrompt = [
-    'purple lighting', 'magenta', 'neon', 'geometric lines', 'vertical bars',
-    'perfectly parallel lines', 'grid', 'barcode', 'repeating streaks',
-    'symmetrical rain', 'artificial particle pattern', 'cartoon', 'anime',
-    'illustration', 'fantasy', 'CGI appearance', 'oversaturated colors',
-    'bright daytime', 'lightning', 'text', 'logo', 'watermark'
-  ].join(', ');
-
-  try {
-    const data = await pixazoPost('/sd3-5/v1/r-sd-3-5-large', key, {
-      prompt,
-      negative_prompt: negativePrompt,
-      image: referenceImageUrl,
-      cfg: 4.5,
-      steps: 40,
-      prompt_strength: 0.25,
-      output_format: 'png',
-      output_quality: 100
-    });
-    const directUrl = media(data);
-    const providerRequestId = requestIdFrom(data);
-    const imageUrl = directUrl || (providerRequestId ? await pixazoStatus(key, providerRequestId, 'sd3-5-large') : null);
-    if (!imageUrl) throw new Error('Pixazo SD3.5 image-to-image returned no image URL or request ID.');
-
-    return json(r, e, {
-      ok: true,
-      contract_version: CONTRACT,
-      capability: 'image',
-      provider: 'pixazo',
-      model: 'sd3-5-large',
-      status: 'generated',
-      free_only: true,
-      request_id: requestId,
-      latency_ms: Date.now() - started,
-      reference_image_url: referenceImageUrl,
-      reference_mode: 'image-to-image',
-      prompt_strength: 0.25,
-      pixazo_request_id: providerRequestId,
-      result: {
-        image_url: imageUrl,
-        source: 'Pixazo Stable Diffusion 3.5 image-to-image',
-        models_used: ['sd3-5-large']
-      }
-    });
-  } catch (error) {
-    return json(r, e, {
-      ok: false,
-      contract_version: CONTRACT,
-      capability: 'image',
-      provider: 'pixazo',
-      model: 'sd3-5-large',
-      status: 'provider_error',
-      request_id: requestId,
-      latency_ms: Date.now() - started,
-      error: String(error instanceof Error ? error.message : error).slice(0, 2200)
-    }, 502);
-  }
+  return json(r, e, {
+    ok: false,
+    contract_version: CONTRACT,
+    capability: 'image',
+    provider: 'pixazo',
+    status: 'provider_unavailable',
+    request_id: requestId,
+    cost_class: 'free',
+    error: 'Reference continuation is disabled in the free-only BeatVision execution path. Use the BeatVision Vision Lock and generate a new locked scene image instead.'
+  }, 503);
 }
 
 async function storyboardWithRenderSafeBeats(r: Request, e: any, body: any) {
