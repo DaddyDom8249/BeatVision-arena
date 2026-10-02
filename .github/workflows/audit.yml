@@ -41,6 +41,9 @@ jobs:
       - name: Storyboard integrity regression tests
         run: node --experimental-strip-types --test worker/src/storyboard-validator.test.ts
 
+      - name: BeatVision bridge regression tests
+        run: node --experimental-strip-types --test worker/src/beatvision-bridge.test.ts
+
       - name: Composition and reuse regression tests
         run: node --experimental-strip-types --test worker/src/composition-model.test.ts
 
