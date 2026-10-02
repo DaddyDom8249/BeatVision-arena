@@ -276,79 +276,16 @@ export default {
       }
 
       if (operation === 'referenceContinuation') {
-        const referenceImageUrl = String(payload?.reference_image_url || '').trim();
-        if (!/^https?:\/\//i.test(referenceImageUrl)) return json(r, e, {
-          ok: false,
-          contract_version: CONTRACT,
-          capability: 'image',
-          provider: 'pixazo',
-          model: 'sd3-5-large',
-          status: 'invalid_input',
-          request_id: requestId,
-          error: 'reference_image_url must be a public HTTP(S) image URL.'
-        }, 400);
-
-        const prompt = clip(payload?.prompt || [
-          'Photorealistic cinematic nighttime rain scene viewed through a window.',
-          'Continue the approved reference image as the same visual world.',
-          'Preserve the original camera viewpoint, framing, window geometry, lighting, exposure, atmosphere, rainfall direction, and overall composition.',
-          'Make only subtle natural temporal variation in individual raindrops and distant atmospheric details.',
-          'No people, faces, animals, vehicles, prominent buildings, text, logos, watermarks, UI, purple, magenta, neon, geometric rain, repeating patterns, or composition changes.'
-        ].join('\\n'), 12000);
-
-        const negativePrompt = clip(payload?.negative_prompt || [
-          'purple lighting', 'magenta', 'neon', 'geometric lines', 'vertical bars',
-          'perfectly parallel lines', 'grid', 'barcode', 'repeating streaks',
-          'symmetrical rain', 'artificial particle pattern', 'cartoon', 'anime',
-          'illustration', 'fantasy', 'CGI appearance', 'oversaturated colors',
-          'bright daytime', 'lightning', 'text', 'logo', 'watermark'
-        ].join(', '), 6000);
-
-        const promptStrength = Number(payload?.prompt_strength ?? 0.25);
-        if (!Number.isFinite(promptStrength) || promptStrength < 0 || promptStrength > 1) return json(r, e, {
-          ok: false,
-          contract_version: CONTRACT,
-          capability: 'image',
-          provider: 'pixazo',
-          model: 'sd3-5-large',
-          status: 'invalid_input',
-          request_id: requestId,
-          error: 'prompt_strength must be between 0 and 1.'
-        }, 400);
-
-        const data = await labeled('reference continuation / SD3.5 image-to-image', () => call('/sd3-5/v1/r-sd-3-5-large', key, {
-          prompt,
-          negative_prompt: negativePrompt,
-          image: referenceImageUrl,
-          cfg: Number(payload?.cfg ?? 4.5),
-          steps: Number(payload?.steps ?? 40),
-          prompt_strength: promptStrength,
-          output_format: 'png',
-          output_quality: 100
-        }, 'sd3-5-large'));
-
-        const imageUrl = media(data);
-        if (!imageUrl) throw new Error('Pixazo SD3.5 image-to-image returned no image URL.');
-
         return json(r, e, {
-          ok: true,
+          ok: false,
           contract_version: CONTRACT,
           capability: 'image',
           provider: 'pixazo',
-          model: 'sd3-5-large',
-          status: 'generated',
+          status: 'provider_unavailable',
           request_id: requestId,
-          free_only: true,
-          reference_image_url: referenceImageUrl,
-          reference_mode: 'image-to-image',
-          prompt_strength: promptStrength,
-          pixazo_request_id: data?.id || data?.request_id || null,
-          result: {
-            image_url: imageUrl,
-            source: 'Pixazo Stable Diffusion 3.5 image-to-image',
-            models_used: ['sd3-5-large']
-          }
-        });
+          cost_class: 'free',
+          error: 'Reference continuation is disabled in the free-only BeatVision execution path. Use a Vision Lock scene generation request instead.'
+        }, 503);
       }
 
       if (operation === 'sceneImages') {
