@@ -5,6 +5,7 @@ export { BeatVisionAnimationJob } from './animation-jobs.ts';
 import { validateStoryboard } from './storyboard-validator.ts';
 import { timelineGuardian, validateMediaRecord } from './skills.ts';
 import { detectVisualReuse } from './visual-reuse-detector.ts';
+import { beatVisionBridgeCapabilities, handleBeatVisionBridge } from './beatvision-bridge.ts';
 
 const clientRateLimit = new Map<string, number>();
 const RATE_LIMIT_WINDOW_MS = 10000; // 10 seconds per client IP
@@ -30,6 +31,8 @@ export default {
         service: 'beatvision-provider-arena',
         entrypoint: 'arena-validated-entry',
         contract_version: '1.1',
+        bridge_contract_version: '2.0',
+        beatvision_bridge: beatVisionBridgeCapabilities(env),
         configuration: {
           gateway_token: Boolean(token),
           pixazo_api_key: Boolean(String(env.PIXAZO_API_KEY || '').trim()),
@@ -43,6 +46,11 @@ export default {
     }
 
     // Narrow client image endpoint: allows single scene generation without exposing master GATEWAY_TOKEN
+    if (path.startsWith('/v2/')) {
+      const bridgeResponse = await handleBeatVisionBridge(r, env, (request, bridgeEnv) => arena.fetch(request, bridgeEnv, ctx));
+      if (bridgeResponse) return bridgeResponse;
+    }
+
     if (path === '/v1/client/image/reference-continuation') {
       if (r.method !== 'POST') {
         return json(r, { ok: false, error: 'Method Not Allowed. Reference-continuation endpoint requires POST.' }, 405);
