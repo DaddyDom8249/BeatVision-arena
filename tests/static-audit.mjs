@@ -2,15 +2,20 @@ import fs from 'node:fs';
 
 const required=[
   'app.js','provider-contracts.js','log-guard.js','motion-bridge.js','animation-bridge.js','worker/wrangler.toml',
-  'worker/src/arena-entry.ts','worker/src/arena-validated-entry.ts','worker/src/visual-beat-engine.ts','worker/src/pixazo-media-gateway-fixed.ts',
+  'worker/src/arena-entry.ts','worker/src/arena-validated-entry.ts','worker/src/beatvision-bridge.ts','worker/src/visual-beat-engine.ts','worker/src/pixazo-media-gateway-fixed.ts',
   'worker/src/external-provider-gateway.ts','worker/src/shotstack-gateway.ts','worker/src/video-fallback-gateway.ts',
   'worker/src/animation-jobs.ts','worker/src/render-integrity.ts','worker/src/skills.ts','worker/src/index.ts','worker/src/storyboard-validator.ts'
 ];
 for(const file of required)if(!fs.existsSync(file))throw new Error(`Missing required file: ${file}`);
 const read=file=>fs.readFileSync(file,'utf8');
 const active=required.map(read).join('\n');
-for(const banned of ['huggingface','HF_API_TOKEN','pollinations','gemini'])if(active.toLowerCase().includes(banned.toLowerCase()))throw new Error(`Forbidden active-path reference found: ${banned}`);
+for(const banned of ['huggingface','HF_API_TOKEN','pollinations','gemini','sd3-5','sd3.5'])if(active.toLowerCase().includes(banned.toLowerCase()))throw new Error(`Forbidden active-path reference found: ${banned}`);
 const contracts=read('provider-contracts.js');
+const beatvisionBridge=read('worker/src/beatvision-bridge.ts');
+if(!beatvisionBridge.includes("BEATVISION_BRIDGE_CONTRACT = '2.0'"))throw new Error('BeatVision bridge contract 2.0 is missing.');
+for(const token of ['source.application','vision_lock','world.version','analysis_method','vision_lock_hash','cost_class'])if(!beatvisionBridge.includes(token))throw new Error(`BeatVision bridge missing ${token}.`);
+for(const token of ['sdxl','flux-schnell','sdxl-turbo','ltx-video'])if(!beatvisionBridge.includes(token))throw new Error(`Free provider allowlist missing ${token}.`);
+if(beatvisionBridge.includes('paid')&&beatvisionBridge.includes('fallback'))throw new Error('Bridge contains a paid fallback path.');
 for(const operation of ['analyzeAudio','revealWorld','worldAssets','storyboard','sceneImages','animate','assemble','generateMusic','storeAsset'])if(!contracts.includes(operation))throw new Error(`Missing contract operation: ${operation}`);
 const app=read('app.js');
 if(!app.includes('executeSceneBatch'))throw new Error('Per-scene batching is missing.');
@@ -55,6 +60,8 @@ for(const token of ['normalizeWorldReveal','assertWorldLocked','compileGeneratio
 const validator=read('worker/src/storyboard-validator.ts');
 for(const token of ['partial = false','TIMELINE_EPSILON_SECONDS'])if(!validator.includes(token))throw new Error(`Storyboard validator partial/timestamp tolerance missing ${token}.`);
 const validated=read('worker/src/arena-validated-entry.ts');
+if(!validated.includes("path.startsWith('/v2/')"))throw new Error('Validated Worker does not expose the BeatVision v2 bridge.');
+if(!validated.includes('beatVisionBridgeCapabilities'))throw new Error('Health response does not expose BeatVision bridge capabilities.');
 if(!validated.includes("const partial = operation === 'sceneImages'"))throw new Error('Scene image validation must allow isolated per-scene requests.');
 if(!validated.includes('export { BeatVisionAnimationJob }'))throw new Error('Durable Object class is not exported by the deployed Worker entrypoint.');
 const fallback=read('worker/src/video-fallback-gateway.ts');
