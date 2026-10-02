@@ -220,9 +220,9 @@ export async function handleBeatVisionBridge(
 
   const legacy = toLegacyPayload(payload, operation, model);
   const internalPath =
-    operation === 'sceneImage' ? '/v1/internal/beatvision-scene-image' :
-    operation === 'animate' ? '/v1/internal/beatvision-animate' :
-    '/v1/internal/beatvision-assemble';
+    operation === 'sceneImage' ? '/v1/image/scenes' :
+    operation === 'animate' ? '/v1/video/animate' :
+    '/v1/video/assemble';
 
   const internal = new Request(new URL(internalPath, r.url), {
     method: 'POST',
