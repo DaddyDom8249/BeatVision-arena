@@ -1,5 +1,17 @@
 window.BeatVisionContracts = {
   version: "1.1",
+  beatVisionBridge: {
+    version: "2.0",
+    sourceOfTruth: "beatvision",
+    costClass: "free",
+    operations: {
+      sceneImage: "/v2/scene-image",
+      animate: "/v2/animate",
+      assemble: "/v2/assemble"
+    },
+    freeImageModels: ["sdxl", "flux-schnell", "sdxl-turbo"],
+    freeVideoModels: ["ltx-video"]
+  },
   operations: {
     analyzeAudio: { capability: "audio", path: "/v1/audio/analyze" },
     revealWorld: { capability: "language", path: "/v1/language/world" },
