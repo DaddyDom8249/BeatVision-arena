@@ -18,6 +18,23 @@ The arena exposes a versioned provider-neutral contract for:
 - Storage / delivery
 - Long-running execution through a gateway
 
+## BeatVision integration boundary
+
+BeatVision is the source of truth for song analysis, transcription, World Reveal, Style, Vision Lock, scene direction, approvals, and project state. Arena is an execution layer: it receives an approved, locked BeatVision creative state and turns individual scenes into provider media, then assembles approved motion against the authoritative song timeline.
+
+The current bridge contract is **2.0**. It requires `source.application=beatvision`, a locked `world.version`, a locked `vision_lock`, BeatVision-owned analysis, and explicit scene timing. Arena returns a Vision Lock hash and generation provenance so the main application can record exactly what creative state produced each asset.
+
+Arena does not silently replace BeatVision analysis or world state, and it does not fall back to paid or unknown models. The bridge only permits the configured free image/video model allowlists and Shotstack Sandbox for assembly.
+
+### Bridge endpoints
+
+- `POST /v2/scene-image` — generate one scene image from a locked BeatVision scene.
+- `POST /v2/animate` — animate one approved scene image with the free LTX path.
+- `POST /v2/assemble` — assemble approved motion against the BeatVision master timeline.
+- `GET /health` — reports both legacy 1.1 compatibility and the BeatVision 2.0 bridge capabilities.
+
+The legacy 1.1 provider contract remains available for compatibility while BeatVision migrates to the bridge.
+
 ## Current provider architecture
 
 **Pixazo is the unified creative-generation provider for the active free creative path.** The Arena intentionally allowlists only the Pixazo models that are being used as free models in this implementation.
@@ -78,4 +95,4 @@ Nothing here requires overwriting either existing project. Arena capabilities ar
 
 ## Current status
 
-**Pixazo + Shotstack execution foundation.** The active creative generation path is centralized behind the Pixazo API credential, using the configured Pixazo image/video/audio capabilities. Shotstack remains the deterministic editing/assembly layer. No third-party intelligence provider is bundled or selected by default; optional external intelligence/audio integrations require explicit endpoint, model and secret configuration.
+**BeatVision-owned intelligence + Pixazo/Shotstack execution foundation.** BeatVision owns analysis and creative state. Arena executes only the approved media-generation and assembly steps. Optional legacy language/audio endpoints remain for compatibility, but they are not authoritative for the new BeatVision path.
