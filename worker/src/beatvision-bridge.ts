@@ -56,12 +56,28 @@ function validate(payload: any, operation: string) {
   if (!text(payload?.world?.version, 100)) errors.push('world.version is required for Vision Lock provenance.');
   if (!hasObject(payload?.vision_lock)) errors.push('vision_lock is required.');
   if (payload?.vision_lock?.locked !== true) errors.push('vision_lock.locked must be true before Arena generation.');
-  if (!hasObject(payload?.scene)) errors.push('scene is required.');
 
-  const sceneStart = finite(payload?.scene?.start_time ?? payload?.scene?.startTime, -1);
-  const sceneEnd = finite(payload?.scene?.end_time ?? payload?.scene?.endTime, -1);
-  if (sceneStart < 0 || sceneEnd <= sceneStart) errors.push('scene start/end timing is invalid.');
-  if (sceneEnd > finite(payload?.song?.duration_seconds) + 0.25) errors.push('scene timing exceeds song duration.');
+  if (operation !== 'assemble') {
+    if (!hasObject(payload?.scene)) errors.push('scene is required.');
+    const sceneStart = finite(payload?.scene?.start_time ?? payload?.scene?.startTime, -1);
+    const sceneEnd = finite(payload?.scene?.end_time ?? payload?.scene?.endTime, -1);
+    if (sceneStart < 0 || sceneEnd <= sceneStart) errors.push('scene start/end timing is invalid.');
+    if (sceneEnd > finite(payload?.song?.duration_seconds) + 0.25) errors.push('scene timing exceeds song duration.');
+  } else {
+    const assemblyScenes = payload?.assembly?.scenes;
+    if (!Array.isArray(assemblyScenes) || assemblyScenes.length === 0) {
+      errors.push('assembly.scenes must contain at least one approved scene.');
+    } else {
+      for (const scene of assemblyScenes) {
+        const start = finite(scene?.start_time ?? scene?.startTime, -1);
+        const end = finite(scene?.end_time ?? scene?.endTime, -1);
+        if (start < 0 || end <= start || end > finite(payload?.song?.duration_seconds) + 0.25) {
+          errors.push('assembly scene timing is invalid or exceeds song duration.');
+          break;
+        }
+      }
+    }
+  }
 
   if (operation === 'sceneImage' && payload?.generation?.cost_class && payload.generation.cost_class !== 'free') {
     errors.push('Only cost_class="free" is accepted by the BeatVision bridge.');
@@ -78,7 +94,11 @@ function toLegacyPayload(payload: any, operation: string, model: string | null) 
   const lock = payload.vision_lock || {};
   const style = payload.style || {};
   const scene = payload.scene || {};
+  const assembly = payload.assembly || {};
   const analysis = payload.analysis || {};
+  const storyboardScenes = operation === 'assemble'
+    ? (Array.isArray(assembly.scenes) ? assembly.scenes : [])
+    : [scene];
 
   const lockedContinuity = [
     ...(Array.isArray(lock.characters) ? lock.characters : []),
@@ -140,11 +160,11 @@ function toLegacyPayload(payload: any, operation: string, model: string | null) 
       storyboard: {
         songDuration: finite(payload?.song?.duration_seconds),
         song_duration: finite(payload?.song?.duration_seconds),
-        scenes: [storyboardScene],
-        visual_beats: [storyboardScene],
+        scenes: operation === 'assemble' ? storyboardScenes : [storyboardScene],
+        visual_beats: operation === 'assemble' ? storyboardScenes : [storyboardScene],
       },
-      images: payload.images || undefined,
-      motion: payload.motion || undefined,
+      images: operation === 'assemble' ? (assembly.images || undefined) : (payload.images || undefined),
+      motion: operation === 'assemble' ? (assembly.motion || undefined) : (payload.motion || undefined),
       generation: {
         cost_class: 'free',
         requested_model: model,
@@ -213,8 +233,8 @@ export async function handleBeatVisionBridge(
     world_version: text(payload?.world?.version, 100),
     style_version: text(payload?.style?.version, 100),
     vision_lock: payload?.vision_lock,
-    scene_id: text(payload?.scene?.id || payload?.scene?.beat_id, 200),
-    scene_overrides: payload?.scene?.overrides || {},
+    scene_id: operation === 'assemble' ? '' : text(payload?.scene?.id || payload?.scene?.beat_id, 200),
+    scene_overrides: operation === 'assemble' ? {} : (payload?.scene?.overrides || {}),
   };
   const visionLockHash = await sha256(JSON.stringify(visionLockPayload));
 
