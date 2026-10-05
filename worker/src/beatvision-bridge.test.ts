@@ -7,7 +7,7 @@ test('BeatVision bridge advertises the free execution boundary', () => {
   const caps = beatVisionBridgeCapabilities({});
   assert.equal(caps.source_of_truth, 'beatvision');
   assert.equal(caps.cost_class, 'free');
-  assert.deepEqual(caps.image.models, ['flux-schnell', 'sdxl']);
+  assert.deepEqual(caps.image.models, ['flux-schnell', 'sd3-5', 'sdxl', 'sdxl-lightning', 'sd1-5-inpainting', 'pixelforge-1']);
   assert.deepEqual(caps.video.models, ['ltx-video']);
   assert.equal(caps.assembly.provider, 'shotstack-sandbox');
 });
