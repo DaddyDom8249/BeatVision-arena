@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from './arena-entry.ts';
 
-test('BeatVision scene-image route prefers Flux Schnell and falls back to free SDXL', async () => {
+test('BeatVision scene-image route walks the confirmed free image fallback pool', async () => {
   const originalFetch = globalThis.fetch;
   const calls: string[] = [];
   let fluxAttempts = 0;
@@ -20,7 +20,29 @@ test('BeatVision scene-image route prefers Flux Schnell and falls back to free S
     }
 
     if (url.endsWith('/getImage/v1/getSDXLImage')) {
-      return new Response(JSON.stringify({ output: 'https://example.invalid/sdxl-fallback.png' }), {
+      return new Response(JSON.stringify({ error: 'The balance is insufficient to proceed with this operation.' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (url.endsWith('/sdxl_lightning/getImage/v1/getSDXLImage')) {
+      return new Response(JSON.stringify({ error: 'The balance is insufficient to proceed with this operation.' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (url.endsWith('/pixelforge-image/v1/qwen_image_gen/serve_image')) {
+      return new Response(JSON.stringify({
+        output: {
+          choices: [{
+            message: {
+              content: [{ image: 'https://example.invalid/pixelforge-fallback.png' }]
+            }
+          }]
+        }
+      }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
       });
@@ -68,14 +90,16 @@ test('BeatVision scene-image route prefers Flux Schnell and falls back to free S
     assert.equal(response.status, 200);
     const data = await response.json();
     assert.equal(data.ok, true);
-    assert.equal(data.result.images[0].model, 'sdxl');
+    assert.equal(data.result.images[0].model, 'pixelforge-1');
     assert.equal(data.result.free_only, true);
-    assert.deepEqual(data.result.models_used, ['sdxl']);
+    assert.deepEqual(data.result.models_used, ['pixelforge-1']);
     assert.equal(fluxAttempts, 1);
 
     assert.deepEqual(calls.map(url => new URL(url).pathname), [
       '/flux-1-schnell/v1/getData',
-      '/getImage/v1/getSDXLImage'
+      '/getImage/v1/getSDXLImage',
+      '/sdxl_lightning/getImage/v1/getSDXLImage',
+      '/pixelforge-image/v1/qwen_image_gen/serve_image'
     ]);
     assert.equal(calls.some(url => url.includes('/sdxlTurbo/v2/getData')), false);
     assert.equal(calls.some(url => url.includes('/v2/requests/status/')), false);
