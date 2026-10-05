@@ -14,7 +14,7 @@ const contracts=read('provider-contracts.js');
 const beatvisionBridge=read('worker/src/beatvision-bridge.ts');
 if(!beatvisionBridge.includes("BEATVISION_BRIDGE_CONTRACT = '2.0'"))throw new Error('BeatVision bridge contract 2.0 is missing.');
 for(const token of ['source.application','vision_lock','world.version','analysis_method','vision_lock_hash','cost_class'])if(!beatvisionBridge.includes(token))throw new Error(`BeatVision bridge missing ${token}.`);
-for(const token of ['sdxl','flux-schnell','sdxl-turbo','ltx-video'])if(!beatvisionBridge.includes(token))throw new Error(`Free provider allowlist missing ${token}.`);
+for(const token of ['flux-schnell','ltx-video'])if(!beatvisionBridge.includes(token))throw new Error(`Free provider allowlist missing ${token}.`);
 if(beatvisionBridge.split(/\r?\n/).some(line=>line.toLowerCase().includes('paid')&&line.toLowerCase().includes('fallback')))throw new Error('Bridge contains a paid fallback path.');
 for(const operation of ['analyzeAudio','revealWorld','worldAssets','storyboard','sceneImages','animate','assemble','generateMusic','storeAsset'])if(!contracts.includes(operation))throw new Error(`Missing contract operation: ${operation}`);
 const app=read('app.js');

@@ -1,6 +1,6 @@
 export const BEATVISION_BRIDGE_CONTRACT = '2.0';
 
-const FREE_IMAGE_MODELS = new Set(['sdxl', 'flux-schnell', 'sdxl-turbo']);
+const FREE_IMAGE_MODELS = new Set(['flux-schnell']);
 const FREE_VIDEO_MODELS = new Set(['ltx-video']);
 
 const text = (value: unknown, max = 12000) => String(value ?? '').trim().slice(0, max);
@@ -26,7 +26,7 @@ function hasObject(value: unknown) {
 
 function freeModelFor(operation: string, requested: unknown) {
   const model = text(requested, 100).toLowerCase();
-  if (operation === 'sceneImage') return FREE_IMAGE_MODELS.has(model) ? model : 'sdxl';
+  if (operation === 'sceneImage') return FREE_IMAGE_MODELS.has(model) ? model : 'flux-schnell';
   if (operation === 'animate') return FREE_VIDEO_MODELS.has(model) ? model : 'ltx-video';
   return null;
 }

@@ -8,7 +8,7 @@ VIDEO_PROVIDER = "pixazo"
 PIXAZO_WORLD_IMAGE_MODEL = "flux-schnell"
 PIXAZO_SCENE_IMAGE_MODEL = "flux-schnell"
 PIXAZO_HERO_IMAGE_MODEL = "sdxl"
-EXTERNAL_LANGUAGE_PROVIDER_URL = "https://api.groq.com/openai/v1"
+EXTERNAL_LANGUAGE_PROVIDER_URL = "https://api.groq.com/openai/v1/chat/completions"
 EXTERNAL_LANGUAGE_PROVIDER_MODEL = "openai/gpt-oss-20b"
 
 [[durable_objects.bindings]]
