@@ -6,8 +6,10 @@ compatibility_date = "2026-09-09"
 ALLOWED_ORIGIN = "https://daddydom8249.github.io,https://beat-vision-theta.vercel.app"
 VIDEO_PROVIDER = "pixazo"
 PIXAZO_WORLD_IMAGE_MODEL = "flux-schnell"
-PIXAZO_SCENE_IMAGE_MODEL = "sdxl"
+PIXAZO_SCENE_IMAGE_MODEL = "flux-schnell"
 PIXAZO_HERO_IMAGE_MODEL = "sdxl"
+EXTERNAL_LANGUAGE_PROVIDER_URL = "https://api.groq.com/openai/v1"
+EXTERNAL_LANGUAGE_PROVIDER_MODEL = "openai/gpt-oss-20b"
 
 [[durable_objects.bindings]]
 name = "ANIMATION_JOBS"
@@ -26,13 +28,13 @@ state = "deleted"
 # Secrets expected by the worker:
 # wrangler secret put GATEWAY_TOKEN
 # Optional external language/audio providers are configured only when explicitly supplied.
+[secrets]
+required = ["EXTERNAL_LANGUAGE_PROVIDER_TOKEN"]
+
 # wrangler secret put EXTERNAL_LANGUAGE_PROVIDER_TOKEN
 # wrangler secret put EXTERNAL_AUDIO_PROVIDER_TOKEN
 # wrangler secret put PIXAZO_API_KEY
 # wrangler secret put SHOTSTACK_API_KEY
 
-# Optional external language/audio bindings. No third-party provider URL or model is bundled here.
-# EXTERNAL_LANGUAGE_PROVIDER_URL = "https://your-language-endpoint/v1/chat/completions"
-# EXTERNAL_LANGUAGE_PROVIDER_MODEL = "your-model"
 # EXTERNAL_AUDIO_PROVIDER_URL = "https://your-audio-endpoint/v1/audio/transcriptions"
 # EXTERNAL_AUDIO_PROVIDER_MODEL = "your-transcription-model"
