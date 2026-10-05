@@ -46,7 +46,7 @@ jobs:
 
       - name: Flux Schnell scene-image routing regression test
         run: |
-          npx --yes esbuild worker/src/arena-entry-flux-schnell.test.ts --bundle --format=esm --platform=neutral --outfile=/tmp/arena-entry-flux-schnell.test.mjs
+          npx --yes esbuild worker/src/arena-entry-flux-schnell.test.ts --bundle --format=esm --platform=node --outfile=/tmp/arena-entry-flux-schnell.test.mjs
           node --test /tmp/arena-entry-flux-schnell.test.mjs
 
       - name: Composition and reuse regression tests
