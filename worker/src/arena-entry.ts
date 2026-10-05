@@ -265,7 +265,21 @@ async function languageGenerate(r: Request, e: any, body: any, requestId: string
         );
         const normalized = normalizeVisualBeats(parsed, duration);
         if (!normalized.errors.length) {
-          if (normalized.errors.some((x: string) => x === 'No visual beats were produced.')) {
+          return json(r, e, {
+            ok: true,
+            contract_version: CONTRACT,
+            capability: 'language',
+            provider: 'external',
+            model,
+            status: 'generated',
+            latency_ms: Date.now() - started,
+            request_id: requestId,
+            result: toStoryboard(normalized),
+            coverage: normalized.coverage
+          });
+        }
+
+        if (normalized.errors.some((x: string) => x === 'No visual beats were produced.')) {
           const repairPrompt = [
             'Repair the BeatVision storyboard request below.',
             'Return ONLY one valid JSON object with exactly these top-level keys: sections, visual_beats, coverage_notes.',
@@ -324,19 +338,6 @@ async function languageGenerate(r: Request, e: any, body: any, requestId: string
           }
         }
 
-        return json(r, e, {
-            ok: true,
-            contract_version: CONTRACT,
-            capability: 'language',
-            provider: 'external',
-            model,
-            status: 'generated',
-            latency_ms: Date.now() - started,
-            request_id: requestId,
-            result: toStoryboard(normalized),
-            coverage: normalized.coverage
-          });
-        }
         return json(r, e, {
           ok: false,
           contract_version: CONTRACT,
