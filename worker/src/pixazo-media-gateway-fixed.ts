@@ -100,7 +100,7 @@ async function wait(key: string, requestId: string, model: string) {
   throw new Error(`Pixazo ${model} job timed out after ${LTX_TIMEOUT_MS / 1000} seconds.`);
 }
 
-async function img(key: string, model: 'flux-schnell' | 'sdxl', promptText: string, aspect: 'square' | 'wide' = 'square') {
+async function img(key: string, model: 'flux-schnell', promptText: string, aspect: 'square' | 'wide' = 'square') {
   if (model === 'flux-schnell') {
     const data = await call('/flux-1-schnell/v1/getData', key, {
       prompt: clip(promptText, 2048),
@@ -113,16 +113,7 @@ async function img(key: string, model: 'flux-schnell' | 'sdxl', promptText: stri
     return url;
   }
 
-  const data = await call('/getImage/v1/getSDXLImage', key, {
-    prompt: clip(promptText, 12000),
-    height: aspect === 'wide' ? 768 : 1024,
-    width: aspect === 'wide' ? 1344 : 1024,
-    num_steps: 20,
-    guidance_scale: 5
-  }, model);
-  const url = media(data);
-  if (!url) throw new Error(`Pixazo ${model} returned no image URL.`);
-  return url;
+  throw new Error(`Unsupported image model: ${model}`);
 }
 
 async function labeled(label: string, work: () => Promise<string>) {
@@ -258,7 +249,7 @@ export default {
       if (operation === 'worldAssets') {
         const character = await labeled('character / Flux Schnell', () => img(key, 'flux-schnell', worldPrompt(payload) + '\nFocus on the primary recurring character.'));
         const environment = await labeled('environment / Flux Schnell', () => img(key, 'flux-schnell', worldPrompt(payload) + '\nFocus on the defining environment.'));
-        const hero = await labeled('hero / SDXL', () => img(key, 'sdxl', worldPrompt(payload) + '\nCreate a polished establishing keyframe.'));
+        const hero = await labeled('hero / Flux Schnell', () => img(key, 'flux-schnell', worldPrompt(payload) + '\nCreate a polished establishing keyframe.'));
         return json(r, e, {
           ok: true,
           contract_version: CONTRACT,
@@ -270,7 +261,7 @@ export default {
             characters: [{ name: 'Primary BeatVision character', image_url: character }],
             environments: [{ name: 'Primary BeatVision environment', image_url: environment }],
             hero_image_url: hero,
-            models_used: ['flux-1-schnell', 'sdxl']
+            models_used: ['flux-1-schnell']
           }
         });
       }
@@ -299,7 +290,7 @@ export default {
         const images = [];
         for (let i = 0; i < scenes.length; i += 1) {
           const scene = scenes[i];
-          const imageUrl = await labeled(`scene ${i + 1} / SDXL Free`, () => img(key, 'sdxl', worldPrompt(payload, scene), 'wide'));
+          const imageUrl = await labeled(`scene ${i + 1} / Flux Schnell Free`, () => img(key, 'flux-schnell', worldPrompt(payload, scene), 'wide'));
           images.push({ scene: Number(scene.scene || i + 1), status: 'generated', image_url: imageUrl });
         }
         return json(r, e, {
@@ -307,9 +298,9 @@ export default {
           contract_version: CONTRACT,
           capability: 'image',
           provider: 'pixazo',
-          model: 'sdxl',
+          model: 'flux-1-schnell',
           request_id: requestId,
-          result: { images, models_used: ['sdxl'] }
+          result: { images, models_used: ['flux-1-schnell'] }
         });
       }
 
