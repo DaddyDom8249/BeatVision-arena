@@ -73,50 +73,49 @@ async function pixazoStatus(key: string, requestId: string, model: string) {
   const TIMEOUT_MS = 45000;
   const deadline = Date.now() + TIMEOUT_MS;
   while (Date.now() < deadline) {
-    const response = await fetch(`${BASE}/v2/requests/status/${encodeURIComponent(requestId)}`, {
-      headers: { 'Ocp-Apim-Subscription-Key': key, 'Cache-Control': 'no-cache' }
-    });
-    const text = await response.text();
-    let data: any;
-    try { data = JSON.parse(text); } catch { data = {}; }
-    if (!response.ok) {
-      // Flux Schnell has historically exposed a model-specific status endpoint.
-      // Keep the universal v2 endpoint as the primary path, but fall back to
-      // the documented legacy endpoint if the universal route rejects the job.
-      if (model === 'flux-schnell') {
-        const legacy = await fetch(`${BASE}/flux-1-schnell/v1/checkStatus`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Ocp-Apim-Subscription-Key': key,
-            'Cache-Control': 'no-cache'
-          },
-          body: JSON.stringify({ requestId })
-        });
-        const legacyText = await legacy.text();
-        let legacyData: any;
-        try { legacyData = JSON.parse(legacyText); } catch { legacyData = {}; }
-        if (!legacy.ok) {
-          throw new Error(`Pixazo ${model} status ${response.status}; legacy status ${legacy.status}: ${legacyText.slice(0, 1200)}`);
-        }
-        const legacyUrl = media(legacyData);
-        const legacyStatus = String(legacyData?.status || legacyData?.state || '').toUpperCase();
-        if (legacyUrl) return legacyUrl;
-        if (['ERROR', 'FAILED', 'CANCELED', 'CANCELLED'].includes(legacyStatus)) {
-          throw new Error(`Pixazo ${model} legacy job ${legacyStatus}: ${String(legacyData?.error || legacyData?.message || 'unknown provider error').slice(0, 1600)}`);
-        }
-        throw new Error(`Pixazo ${model} status rejected the universal endpoint and legacy status returned no media URL: ${legacyText.slice(0, 1200)}`);
+    if (model === 'flux-schnell') {
+      const response = await fetch(`${BASE}/flux-1-schnell/v1/checkStatus`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Ocp-Apim-Subscription-Key': key,
+          'Cache-Control': 'no-cache'
+        },
+        body: JSON.stringify({ requestId })
+      });
+      const text = await response.text();
+      let data: any;
+      try { data = JSON.parse(text); } catch { data = {}; }
+
+      if (!response.ok) {
+        throw new Error(`Pixazo flux-schnell status ${response.status}: ${text.slice(0, 1200)}`);
       }
-      throw new Error(`Pixazo ${model} status ${response.status}: ${text.slice(0, 1200)}`);
-    }
-    const url = media(data);
-    const status = String(data?.status || data?.state || '').toUpperCase();
-    if (url) return url;
-    if (['ERROR', 'FAILED', 'CANCELED', 'CANCELLED'].includes(status)) {
-      throw new Error(`Pixazo ${model} job ${status}: ${String(data?.error || data?.message || 'unknown provider error').slice(0, 1600)}`);
-    }
-    if (['COMPLETED', 'SUCCEEDED', 'SUCCESS'].includes(status)) {
-      throw new Error(`Pixazo ${model} job ${status} without a media URL: ${text.slice(0, 1200)}`);
+
+      const url = media(data);
+      const status = String(data?.status || data?.state || '').toUpperCase();
+      if (url) return url;
+      if (['ERROR', 'FAILED', 'CANCELED', 'CANCELLED'].includes(status)) {
+        throw new Error(`Pixazo flux-schnell job ${status}: ${String(data?.error || data?.message || 'unknown').slice(0, 1600)}`);
+      }
+    } else {
+      const response = await fetch(`${BASE}/v2/requests/status/${encodeURIComponent(requestId)}`, {
+        headers: { 'Ocp-Apim-Subscription-Key': key, 'Cache-Control': 'no-cache' }
+      });
+      const text = await response.text();
+      let data: any;
+      try { data = JSON.parse(text); } catch { data = {}; }
+      if (!response.ok) {
+        throw new Error(`Pixazo ${model} status ${response.status}: ${text.slice(0, 1200)}`);
+      }
+      const url = media(data);
+      const status = String(data?.status || data?.state || '').toUpperCase();
+      if (url) return url;
+      if (['ERROR', 'FAILED', 'CANCELED', 'CANCELLED'].includes(status)) {
+        throw new Error(`Pixazo ${model} job ${status}: ${String(data?.error || data?.message || 'unknown provider error').slice(0, 1600)}`);
+      }
+      if (['COMPLETED', 'SUCCEEDED', 'SUCCESS'].includes(status)) {
+        throw new Error(`Pixazo ${model} job ${status} without a media URL: ${text.slice(0, 1200)}`);
+      }
     }
     await sleep(POLL_MS);
   }
@@ -124,29 +123,8 @@ async function pixazoStatus(key: string, requestId: string, model: string) {
 }
 
 async function generateSceneImage(key: string, prompt: string, sceneNumber: number) {
-  let sdxlError = '';
-  try {
-    const data = await pixazoPost('/getImage/v1/getSDXLImage', key, {
-      prompt,
-      negative_prompt: 'low quality, blurry, distorted anatomy, duplicate face, extra limbs, text, logo, watermark, UI, caption, repeated composition, duplicate shot',
-      height: 768,
-      width: 1344,
-      num_steps: 20,
-      guidance_scale: 5,
-      seed: Math.floor(Math.random() * 2147483647)
-    });
-    const url = media(data);
-    if (url) return { image_url: url, model: 'sdxl' };
-    const requestId = requestIdFrom(data);
-    if (requestId) {
-      const polled = await pixazoStatus(key, requestId, 'sdxl');
-      return { image_url: polled, model: 'sdxl' };
-    }
-    throw new Error(`SDXL completed without an image URL or request ID. Body: ${JSON.stringify(data).slice(0, 800)}`);
-  } catch (error) {
-    sdxlError = error instanceof Error ? error.message : String(error);
-  }
-
+  // BeatVision scene-image path is Flux Schnell ONLY.
+  // No SDXL. No SDXL Turbo. No silent model substitution.
   try {
     const data = await pixazoPost('/flux-1-schnell/v1/getData', key, {
       prompt: clip(prompt, 2048),
@@ -155,42 +133,22 @@ async function generateSceneImage(key: string, prompt: string, sceneNumber: numb
       width: 1024,
       seed: Math.floor(Math.random() * 2147483647)
     });
+
     const url = media(data);
-    if (url) return { image_url: url, model: 'flux-1-schnell', fallback_reason: sdxlError };
+    if (url) return { image_url: url, model: 'flux-1-schnell' };
+
     const requestId = requestIdFrom(data);
     if (requestId) {
       const polled = await pixazoStatus(key, requestId, 'flux-schnell');
-      return { image_url: polled, model: 'flux-1-schnell', fallback_reason: sdxlError };
+      return { image_url: polled, model: 'flux-1-schnell' };
     }
-    throw new Error(`Flux Schnell completed without an image URL or request ID. Body: ${JSON.stringify(data).slice(0, 800)}`);
-  } catch (error) {
-    const fluxError = error instanceof Error ? error.message : String(error);
 
-    // Final free fallback: current Pixazo SDXL Turbo endpoint is synchronous
-    // and returns an output URL directly, avoiding queue/status incompatibilities.
-    try {
-      const turbo = await pixazoPost('/sdxlTurbo/v2/getData', key, {
-        prompt: clip(prompt, 12000),
-        height: 768,
-        width: 768,
-        num_inference_steps: 1,
-        guidance_scale: 0,
-        seed: Math.floor(Math.random() * 2147483647)
-      });
-      const turboUrl = media(turbo);
-      if (turboUrl) {
-        return {
-          image_url: turboUrl,
-          model: 'sdxl-turbo',
-          fallback_reason: `${sdxlError}; ${fluxError}`
-        };
-      }
-      throw new Error(`SDXL Turbo returned no image URL. Body: ${JSON.stringify(turbo).slice(0, 800)}`);
-    } catch (turboError) {
-      throw new Error(
-        `scene ${sceneNumber}: SDXL failed: ${sdxlError}; Flux Schnell fallback failed: ${fluxError}; SDXL Turbo fallback failed: ${turboError instanceof Error ? turboError.message : String(turboError)}`
-      );
-    }
+    throw new Error(
+      `Flux Schnell completed without an image URL or request ID. Body: ${JSON.stringify(data).slice(0, 800)}`
+    );
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    throw new Error(`scene ${sceneNumber}: Flux Schnell failed: ${msg}`);
   }
 }
 
