@@ -122,7 +122,7 @@ async function pixazoStatus(key: string, requestId: string, model: string) {
   throw new Error(`Pixazo ${model} request ${requestId} did not complete within ${TIMEOUT_MS / 1000} seconds.`);
 }
 
-const FREE_SCENE_IMAGE_MODELS = ['flux-schnell', 'sdxl', 'sdxl-lightning', 'pixelforge-1'] as const;
+const FREE_SCENE_IMAGE_MODELS = ['flux-schnell', 'sd3-5', 'sdxl', 'sdxl-lightning', 'sd1-5-inpainting', 'pixelforge-1'] as const;
 
 async function generateSceneImageModel(key: string, prompt: string, model: typeof FREE_SCENE_IMAGE_MODELS[number]) {
   if (model === 'flux-schnell') {
@@ -145,6 +145,25 @@ async function generateSceneImageModel(key: string, prompt: string, model: typeo
 
     throw new Error(
       `Flux Schnell completed without an image URL or request ID. Body: ${JSON.stringify(data).slice(0, 800)}`
+    );
+  }
+
+  if (model === 'sd3-5') {
+    const data = await pixazoPost('/sd3-5/v1/r-sd-3-5-large', key, {
+      prompt: clip(prompt, 12000),
+      aspect_ratio: '1:1',
+      cfg: 4.5,
+      steps: 40,
+      output_format: 'webp',
+      output_quality: 90,
+      prompt_strength: 0.85
+    });
+
+    const url = media(data);
+    if (url) return { image_url: url, model };
+
+    throw new Error(
+      `Stable Diffusion 3.5 completed without an image URL. Body: ${JSON.stringify(data).slice(0, 800)}`
     );
   }
 
@@ -180,6 +199,24 @@ async function generateSceneImageModel(key: string, prompt: string, model: typeo
 
     throw new Error(
       `SDXL Lightning completed without an image URL. Body: ${JSON.stringify(data).slice(0, 800)}`
+    );
+  }
+
+  if (model === 'sd1-5-inpainting') {
+    const data = await pixazoPost('/inpainting/v1/getImage', key, {
+      prompt: clip(prompt, 12000),
+      height: 1024,
+      width: 1024,
+      num_steps: 20,
+      guidance: 5,
+      seed: Math.floor(Math.random() * 2147483647)
+    });
+
+    const url = media(data);
+    if (url) return { image_url: url, model };
+
+    throw new Error(
+      `Stable Diffusion 1.5 Inpainting completed without an image URL. Body: ${JSON.stringify(data).slice(0, 800)}`
     );
   }
 
