@@ -122,10 +122,10 @@ async function pixazoStatus(key: string, requestId: string, model: string) {
   throw new Error(`Pixazo ${model} request ${requestId} did not complete within ${TIMEOUT_MS / 1000} seconds.`);
 }
 
-async function generateSceneImage(key: string, prompt: string, sceneNumber: number) {
-  // BeatVision scene-image path is Flux Schnell ONLY.
-  // No SDXL. No SDXL Turbo. No silent model substitution.
-  try {
+const FREE_SCENE_IMAGE_MODELS = ['flux-schnell', 'sdxl'] as const;
+
+async function generateSceneImageModel(key: string, prompt: string, model: typeof FREE_SCENE_IMAGE_MODELS[number]) {
+  if (model === 'flux-schnell') {
     const data = await pixazoPost('/flux-1-schnell/v1/getData', key, {
       prompt: clip(prompt, 2048),
       num_steps: 4,
@@ -135,21 +135,55 @@ async function generateSceneImage(key: string, prompt: string, sceneNumber: numb
     });
 
     const url = media(data);
-    if (url) return { image_url: url, model: 'flux-1-schnell' };
+    if (url) return { image_url: url, model };
 
     const requestId = requestIdFrom(data);
     if (requestId) {
-      const polled = await pixazoStatus(key, requestId, 'flux-schnell');
-      return { image_url: polled, model: 'flux-1-schnell' };
+      const polled = await pixazoStatus(key, requestId, model);
+      return { image_url: polled, model };
     }
 
     throw new Error(
       `Flux Schnell completed without an image URL or request ID. Body: ${JSON.stringify(data).slice(0, 800)}`
     );
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    throw new Error(`scene ${sceneNumber}: Flux Schnell failed: ${msg}`);
   }
+
+  if (model === 'sdxl') {
+    const data = await pixazoPost('/getImage/v1/getSDXLImage', key, {
+      prompt: clip(prompt, 12000),
+      height: 768,
+      width: 1344,
+      num_steps: 20,
+      guidance_scale: 5
+    });
+
+    const url = media(data);
+    if (url) return { image_url: url, model };
+
+    throw new Error(
+      `SDXL completed without an image URL. Body: ${JSON.stringify(data).slice(0, 800)}`
+    );
+  }
+
+  throw new Error(`Unsupported free scene-image model: ${model}`);
+}
+
+async function generateSceneImage(key: string, prompt: string, sceneNumber: number) {
+  const failures: string[] = [];
+
+  for (const model of FREE_SCENE_IMAGE_MODELS) {
+    try {
+      const generated = await generateSceneImageModel(key, prompt, model);
+      return generated;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      failures.push(`${model}: ${msg}`);
+    }
+  }
+
+  throw new Error(
+    `scene ${sceneNumber}: all configured Pixazo Free Tier scene-image models failed. Attempts: ${failures.join(' | ')}`
+  );
 }
 
 async function resilientSceneImages(r: Request, e: any, body: any, requestId: string) {
@@ -159,7 +193,7 @@ async function resilientSceneImages(r: Request, e: any, body: any, requestId: st
   if (!scenes.length) return json(r, e, { ok: false, status: 'invalid_input', request_id: requestId, error: 'Storyboard contains no scenes.' }, 400);
   if (scenes.length > 1) return json(r, e, { ok: false, status: 'invalid_input', request_id: requestId, error: 'Scene image gateway expects one visual beat per request. Batch the beats at the client/orchestration layer so failures remain isolated.' }, 400);
   const started = Date.now(); const images: any[] = []; const models = new Set<string>();
-  try { for (let i = 0; i < scenes.length; i += 1) { const sceneNumber = Number(scenes[i]?.scene || i + 1); const generated = await generateSceneImage(key, scenePrompt(payload, scenes[i], i, scenes.length), sceneNumber); images.push({ scene: sceneNumber, beatId: scenes[i]?.beatId || null, status: 'generated', image_url: generated.image_url, model: generated.model }); models.add(generated.model); } return json(r, e, { ok: true, contract_version: CONTRACT, capability: 'image', provider: 'pixazo', model: Array.from(models).join('+'), request_id: requestId, latency_ms: Date.now() - started, result: { images, models_used: Array.from(models), scene_count: images.length, free_only: true } }); } catch (error) { const rawError = String(error instanceof Error ? error.message : error); const sanitized = key ? rawError.split(key).join('[REDACTED]') : rawError; return json(r, e, { ok: false, contract_version: CONTRACT, capability: 'image', provider: 'pixazo', status: 'provider_error', request_id: requestId, latency_ms: Date.now() - started, completed_scene_count: images.length, completed_scenes: images.map(image => image.scene), error: sanitized.slice(0, 2200) }, 502); }
+  try { for (let i = 0; i < scenes.length; i += 1) { const sceneNumber = Number(scenes[i]?.scene || i + 1); const generated = await generateSceneImage(key, scenePrompt(payload, scenes[i], i, scenes.length), sceneNumber); images.push({ scene: sceneNumber, beatId: scenes[i]?.beatId || null, status: 'generated', image_url: generated.image_url, model: generated.model }); models.add(generated.model); } return json(r, e, { ok: true, contract_version: CONTRACT, capability: 'image', provider: 'pixazo', model: Array.from(models).join('+'), request_id: requestId, latency_ms: Date.now() - started, result: { images, models_used: Array.from(models), scene_count: images.length, free_only: true, fallback_policy: 'free-only-sequential' } }); } catch (error) { const rawError = String(error instanceof Error ? error.message : error); const sanitized = key ? rawError.split(key).join('[REDACTED]') : rawError; return json(r, e, { ok: false, contract_version: CONTRACT, capability: 'image', provider: 'pixazo', status: 'provider_error', request_id: requestId, latency_ms: Date.now() - started, completed_scene_count: images.length, completed_scenes: images.map(image => image.scene), error: sanitized.slice(0, 2200) }, 502); }
 }
 
 const APPROVED_YOUTUBE_REFERENCE = 'https://pub-582b7213209642b9b995c96c95a30381.r2.dev/sdxl/prompt-133708738-1790839798765-439420.png';
