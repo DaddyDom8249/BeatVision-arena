@@ -26,7 +26,10 @@ state = "deleted"
 # Secrets expected by the worker:
 # wrangler secret put GATEWAY_TOKEN
 # Optional external language/audio providers are configured only when explicitly supplied.
-wrangler secret put EXTERNAL_LANGUAGE_PROVIDER_TOKEN
+[secrets]
+required = ["EXTERNAL_LANGUAGE_PROVIDER_TOKEN"]
+
+# wrangler secret put EXTERNAL_LANGUAGE_PROVIDER_TOKEN
 # wrangler secret put EXTERNAL_AUDIO_PROVIDER_TOKEN
 # wrangler secret put PIXAZO_API_KEY
 # wrangler secret put SHOTSTACK_API_KEY
