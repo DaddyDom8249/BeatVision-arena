@@ -1,6 +1,6 @@
 export const BEATVISION_BRIDGE_CONTRACT = '2.0';
 
-const FREE_IMAGE_MODELS = new Set(['flux-schnell', 'sdxl', 'sdxl-lightning', 'pixelforge-1']);
+const FREE_IMAGE_MODELS = new Set(['flux-schnell', 'sd3-5', 'sdxl', 'sdxl-lightning', 'sd1-5-inpainting', 'pixelforge-1']);
 const FREE_VIDEO_MODELS = new Set(['ltx-video']);
 
 const text = (value: unknown, max = 12000) => String(value ?? '').trim().slice(0, max);
