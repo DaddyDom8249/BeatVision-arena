@@ -45,7 +45,9 @@ jobs:
         run: node --experimental-strip-types --test worker/src/beatvision-bridge.test.ts
 
       - name: Flux Schnell scene-image routing regression test
-        run: node --experimental-strip-types --test worker/src/arena-entry-flux-schnell.test.ts
+        run: |
+          npx --yes esbuild worker/src/arena-entry-flux-schnell.test.ts --bundle --format=esm --platform=neutral --outfile=/tmp/arena-entry-flux-schnell.test.mjs
+          node --test /tmp/arena-entry-flux-schnell.test.mjs
 
       - name: Composition and reuse regression tests
         run: node --experimental-strip-types --test worker/src/composition-model.test.ts
