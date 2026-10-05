@@ -43,7 +43,10 @@ jobs:
 
       - name: BeatVision bridge regression tests
         run: node --experimental-strip-types --test worker/src/beatvision-bridge.test.ts
-\n      - name: Flux Schnell scene-image routing regression test\n        run: node --experimental-strip-types --test worker/src/arena-entry-flux-schnell.test.ts\n
+
+      - name: Flux Schnell scene-image routing regression test
+        run: node --experimental-strip-types --test worker/src/arena-entry-flux-schnell.test.ts
+
       - name: Composition and reuse regression tests
         run: node --experimental-strip-types --test worker/src/composition-model.test.ts
 
