@@ -122,7 +122,7 @@ async function pixazoStatus(key: string, requestId: string, model: string) {
   throw new Error(`Pixazo ${model} request ${requestId} did not complete within ${TIMEOUT_MS / 1000} seconds.`);
 }
 
-const FREE_SCENE_IMAGE_MODELS = ['flux-schnell', 'sdxl'] as const;
+const FREE_SCENE_IMAGE_MODELS = ['flux-schnell', 'sdxl', 'sdxl-lightning', 'pixelforge-1'] as const;
 
 async function generateSceneImageModel(key: string, prompt: string, model: typeof FREE_SCENE_IMAGE_MODELS[number]) {
   if (model === 'flux-schnell') {
@@ -162,6 +162,41 @@ async function generateSceneImageModel(key: string, prompt: string, model: typeo
 
     throw new Error(
       `SDXL completed without an image URL. Body: ${JSON.stringify(data).slice(0, 800)}`
+    );
+  }
+
+  if (model === 'sdxl-lightning') {
+    const data = await pixazoPost('/sdxl_lightning/getImage/v1/getSDXLImage', key, {
+      prompt: clip(prompt, 12000),
+      height: 1024,
+      width: 1024,
+      num_steps: 20,
+      guidance: 5,
+      seed: Math.floor(Math.random() * 2147483647)
+    });
+
+    const url = media(data);
+    if (url) return { image_url: url, model };
+
+    throw new Error(
+      `SDXL Lightning completed without an image URL. Body: ${JSON.stringify(data).slice(0, 800)}`
+    );
+  }
+
+  if (model === 'pixelforge-1') {
+    const data = await pixazoPost('/pixelforge-image/v1/qwen_image_gen/serve_image', key, {
+      prompt: clip(prompt, 800),
+      size: '1664*928'
+    });
+
+    const url = data?.output?.choices?.[0]?.message?.content?.find(
+      (item: any) => typeof item?.image === 'string' && /^https?:\\/\\//i.test(item.image)
+    )?.image || null;
+
+    if (url) return { image_url: url, model };
+
+    throw new Error(
+      `PixelForge 1.0 completed without an image URL. Body: ${JSON.stringify(data).slice(0, 800)}`
     );
   }
 
