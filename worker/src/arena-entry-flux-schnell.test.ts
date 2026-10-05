@@ -19,11 +19,19 @@ test('BeatVision scene-image route walks the confirmed free image fallback pool'
       });
     }
 
+    if (url.endsWith('/sd3-5/v1/r-sd-3-5-large')) {
+      return new Response(JSON.stringify({ error: 'The balance is insufficient to proceed with this operation.' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+    }
+
     if (url.endsWith('/getImage/v1/getSDXLImage')) {
       return new Response(JSON.stringify({ error: 'The balance is insufficient to proceed with this operation.' }), {
         status: 403,
         headers: { 'Content-Type': 'application/json' }
       });
+    }
+
+    if (url.endsWith('/inpainting/v1/getImage')) {
+      return new Response(JSON.stringify({ error: 'The balance is insufficient to proceed with this operation.' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
     }
 
     if (url.endsWith('/sdxl_lightning/getImage/v1/getSDXLImage')) {
@@ -97,8 +105,10 @@ test('BeatVision scene-image route walks the confirmed free image fallback pool'
 
     assert.deepEqual(calls.map(url => new URL(url).pathname), [
       '/flux-1-schnell/v1/getData',
+      '/sd3-5/v1/r-sd-3-5-large',
       '/getImage/v1/getSDXLImage',
       '/sdxl_lightning/getImage/v1/getSDXLImage',
+      '/inpainting/v1/getImage',
       '/pixelforge-image/v1/qwen_image_gen/serve_image'
     ]);
     assert.equal(calls.some(url => url.includes('/sdxlTurbo/v2/getData')), false);
