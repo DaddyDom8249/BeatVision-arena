@@ -58,6 +58,8 @@ function validate(payload: any, operation: string) {
   if (payload?.vision_lock?.locked !== true) errors.push('vision_lock.locked must be true before Arena generation.');
   if (operation !== 'assemble' && !hasObject(payload?.scene)) errors.push('scene is required.');
 
+  if (operation === 'assemble') return errors;
+
   const sceneStart = finite(payload?.scene?.start_time ?? payload?.scene?.startTime, -1);
   const sceneEnd = finite(payload?.scene?.end_time ?? payload?.scene?.endTime, -1);
   if (sceneStart < 0 || sceneEnd <= sceneStart) errors.push('scene start/end timing is invalid.');
