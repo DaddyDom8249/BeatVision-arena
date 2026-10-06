@@ -145,6 +145,7 @@ function toLegacyPayload(payload: any, operation: string, model: string | null) 
       },
       images: payload.images || undefined,
       motion: payload.motion || undefined,
+      audio_data: payload.audio_data || payload.audio_base64 || undefined,
       generation: {
         cost_class: 'free',
         requested_model: model,
