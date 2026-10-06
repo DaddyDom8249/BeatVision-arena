@@ -56,7 +56,7 @@ function validate(payload: any, operation: string) {
   if (!text(payload?.world?.version, 100)) errors.push('world.version is required for Vision Lock provenance.');
   if (!hasObject(payload?.vision_lock)) errors.push('vision_lock is required.');
   if (payload?.vision_lock?.locked !== true) errors.push('vision_lock.locked must be true before Arena generation.');
-  if (!hasObject(payload?.scene)) errors.push('scene is required.');
+  if (operation !== 'assemble' && !hasObject(payload?.scene)) errors.push('scene is required.');
 
   const sceneStart = finite(payload?.scene?.start_time ?? payload?.scene?.startTime, -1);
   const sceneEnd = finite(payload?.scene?.end_time ?? payload?.scene?.endTime, -1);
@@ -140,8 +140,8 @@ function toLegacyPayload(payload: any, operation: string, model: string | null) 
       storyboard: {
         songDuration: finite(payload?.song?.duration_seconds),
         song_duration: finite(payload?.song?.duration_seconds),
-        scenes: [storyboardScene],
-        visual_beats: [storyboardScene],
+        scenes: operation === 'assemble' && Array.isArray(payload?.storyboard?.scenes) ? payload.storyboard.scenes : [storyboardScene],
+        visual_beats: operation === 'assemble' && Array.isArray(payload?.storyboard?.visual_beats) ? payload.storyboard.visual_beats : [storyboardScene],
       },
       images: payload.images || undefined,
       motion: payload.motion || undefined,
