@@ -128,8 +128,7 @@ async function generateCloudflareSceneImage(e: any, prompt: string, sceneNumber:
   }
   const response = await e.AI.run('@cf/black-forest-labs/flux-1-schnell', {
     prompt: clip(prompt, 2048),
-    steps: 4,
-    seed: Math.floor(Math.random() * 2147483647)
+    steps: 4
   });
   const image = typeof response?.image === 'string' ? response.image.trim() : '';
   if (!image) throw new Error(`Cloudflare Workers AI returned no image data for scene ${sceneNumber}.`);
