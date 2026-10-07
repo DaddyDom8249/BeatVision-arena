@@ -122,10 +122,25 @@ async function pixazoStatus(key: string, requestId: string, model: string) {
   throw new Error(`Pixazo ${model} request ${requestId} did not complete within ${TIMEOUT_MS / 1000} seconds.`);
 }
 
-async function generateSceneImage(key: string, prompt: string, sceneNumber: number) {
-  // BeatVision scene-image path is Flux Schnell ONLY.
-  // No SDXL. No SDXL Turbo. No silent model substitution.
+async function generateCloudflareSceneImage(e: any, prompt: string, sceneNumber: number) {
+  if (!e?.AI || typeof e.AI.run !== 'function') {
+    throw new Error('Cloudflare Workers AI fallback is not configured.');
+  }
+  const response = await e.AI.run('@cf/black-forest-labs/flux-1-schnell', {
+    prompt: clip(prompt, 2048),
+    steps: 4,
+    seed: Math.floor(Math.random() * 2147483647)
+  });
+  const image = typeof response?.image === 'string' ? response.image.trim() : '';
+  if (!image) throw new Error(`Cloudflare Workers AI returned no image data for scene ${sceneNumber}.`);
+  return { image_base64: image, model: 'flux-1-schnell', provider: 'cloudflare-workers-ai', fallback_used: true };
+}
+
+async function generateSceneImage(key: string, prompt: string, sceneNumber: number, e: any) {
+  // Primary: Pixazo Flux Schnell. Fallback: Cloudflare Workers AI Flux Schnell.
+  // Both are free-only paths. Never silently substitute a paid/unknown model.
   try {
+    if (!key) throw new Error('Pixazo API key is not configured.');
     const data = await pixazoPost('/flux-1-schnell/v1/getData', key, {
       prompt: clip(prompt, 2048),
       num_steps: 4,
@@ -133,33 +148,37 @@ async function generateSceneImage(key: string, prompt: string, sceneNumber: numb
       width: 1024,
       seed: Math.floor(Math.random() * 2147483647)
     });
-
     const url = media(data);
-    if (url) return { image_url: url, model: 'flux-1-schnell' };
-
+    if (url) return { image_url: url, model: 'flux-1-schnell', provider: 'pixazo', fallback_used: false };
     const requestId = requestIdFrom(data);
     if (requestId) {
       const polled = await pixazoStatus(key, requestId, 'flux-schnell');
-      return { image_url: polled, model: 'flux-1-schnell' };
+      return { image_url: polled, model: 'flux-1-schnell', provider: 'pixazo', fallback_used: false };
     }
-
-    throw new Error(
-      `Flux Schnell completed without an image URL or request ID. Body: ${JSON.stringify(data).slice(0, 800)}`
-    );
+    throw new Error(`Flux Schnell completed without an image URL or request ID. Body: ${JSON.stringify(data).slice(0, 800)}`);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    throw new Error(`scene ${sceneNumber}: Flux Schnell failed: ${msg}`);
+    const fallbackEligible = /Pixazo (?:402|403)|Insufficient Balance|balance is insufficient|Pixazo API key is not configured/i.test(msg);
+    if (!fallbackEligible) throw new Error(`scene ${sceneNumber}: Flux Schnell failed: ${msg}`);
+    try {
+      return await generateCloudflareSceneImage(e, prompt, sceneNumber);
+    } catch (fallbackError) {
+      const fallbackMsg = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+      throw new Error(`scene ${sceneNumber}: Pixazo Flux Schnell unavailable; Cloudflare Workers AI Flux Schnell fallback failed: ${fallbackMsg}`);
+    }
   }
 }
 
 async function resilientSceneImages(r: Request, e: any, body: any, requestId: string) {
-  const key = e.PIXAZO_API_KEY; if (!key) return json(r, e, { ok: false, error: 'PIXAZO_API_KEY is not configured.', request_id: requestId }, 503);
+  const key = String(e.PIXAZO_API_KEY || '').trim();
+  const cloudflareAiAvailable = Boolean(e?.AI && typeof e.AI.run === 'function');
+  if (!key && !cloudflareAiAvailable) return json(r, e, { ok: false, status: 'provider_unavailable', error: 'No free scene-image provider is configured.', request_id: requestId }, 503);
   if (body?.contract_version !== CONTRACT) return json(r, e, { ok: false, error: 'Expected BeatVision contract 1.1.', request_id: requestId }, 400);
   const payload = body?.payload || {}; const scenes = Array.isArray(payload?.storyboard?.scenes) ? payload.storyboard.scenes : [];
   if (!scenes.length) return json(r, e, { ok: false, status: 'invalid_input', request_id: requestId, error: 'Storyboard contains no scenes.' }, 400);
   if (scenes.length > 1) return json(r, e, { ok: false, status: 'invalid_input', request_id: requestId, error: 'Scene image gateway expects one visual beat per request. Batch the beats at the client/orchestration layer so failures remain isolated.' }, 400);
   const started = Date.now(); const images: any[] = []; const models = new Set<string>();
-  try { for (let i = 0; i < scenes.length; i += 1) { const sceneNumber = Number(scenes[i]?.scene || i + 1); const generated = await generateSceneImage(key, scenePrompt(payload, scenes[i], i, scenes.length), sceneNumber); images.push({ scene: sceneNumber, beatId: scenes[i]?.beatId || null, status: 'generated', image_url: generated.image_url, model: generated.model }); models.add(generated.model); } return json(r, e, { ok: true, contract_version: CONTRACT, capability: 'image', provider: 'pixazo', model: Array.from(models).join('+'), request_id: requestId, latency_ms: Date.now() - started, result: { images, models_used: Array.from(models), scene_count: images.length, free_only: true } }); } catch (error) { const rawError = String(error instanceof Error ? error.message : error); const sanitized = key ? rawError.split(key).join('[REDACTED]') : rawError; return json(r, e, { ok: false, contract_version: CONTRACT, capability: 'image', provider: 'pixazo', status: 'provider_error', request_id: requestId, latency_ms: Date.now() - started, completed_scene_count: images.length, completed_scenes: images.map(image => image.scene), error: sanitized.slice(0, 2200) }, 502); }
+  try { for (let i = 0; i < scenes.length; i += 1) { const sceneNumber = Number(scenes[i]?.scene || i + 1); const generated = await generateSceneImage(key, scenePrompt(payload, scenes[i], i, scenes.length), sceneNumber, e); images.push({ scene: sceneNumber, beatId: scenes[i]?.beatId || null, status: 'generated', image_url: generated.image_url || null, image_base64: generated.image_base64 || null, model: generated.model, provider: generated.provider, fallback_used: Boolean(generated.fallback_used) }); models.add(generated.model); } return json(r, e, { ok: true, contract_version: CONTRACT, capability: 'image', provider: 'arena', model: Array.from(models).join('+'), request_id: requestId, latency_ms: Date.now() - started, result: { images, models_used: Array.from(models), scene_count: images.length, free_only: true, fallback_used: images.some(image => image.fallback_used), provider_path: Array.from(new Set(images.map(image => image.provider).filter(Boolean))) } }); } catch (error) { const rawError = String(error instanceof Error ? error.message : error); const sanitized = key ? rawError.split(key).join('[REDACTED]') : rawError; return json(r, e, { ok: false, contract_version: CONTRACT, capability: 'image', provider: 'arena', status: 'provider_error', request_id: requestId, latency_ms: Date.now() - started, completed_scene_count: images.length, completed_scenes: images.map(image => image.scene), free_only: true, error: sanitized.slice(0, 2200) }, 502); }
 }
 
 const APPROVED_YOUTUBE_REFERENCE = 'https://pub-582b7213209642b9b995c96c95a30381.r2.dev/sdxl/prompt-133708738-1790839798765-439420.png';
