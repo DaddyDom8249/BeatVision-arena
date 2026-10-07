@@ -299,7 +299,7 @@ export default {
         const images = [];
         for (let i = 0; i < scenes.length; i += 1) {
           const scene = scenes[i];
-          const imageUrl = await labeled(`scene ${i + 1} / SDXL Free`, () => img(key, 'sdxl', worldPrompt(payload, scene), 'wide'));
+          const imageUrl = await labeled(`scene ${i + 1} / Flux Schnell Free`, () => img(key, 'flux-schnell', worldPrompt(payload, scene), 'wide'));
           images.push({ scene: Number(scene.scene || i + 1), status: 'generated', image_url: imageUrl });
         }
         return json(r, e, {
@@ -307,9 +307,9 @@ export default {
           contract_version: CONTRACT,
           capability: 'image',
           provider: 'pixazo',
-          model: 'sdxl',
+          model: 'flux-1-schnell',
           request_id: requestId,
-          result: { images, models_used: ['sdxl'] }
+          result: { images, models_used: ['flux-1-schnell'] }
         });
       }
 
