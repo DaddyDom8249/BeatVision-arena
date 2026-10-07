@@ -72,3 +72,57 @@ test('BeatVision scene-image route executes Flux Schnell only', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test('BeatVision scene-image route falls back to Cloudflare Workers AI on Pixazo balance failure', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: RequestInfo | URL) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.endsWith('/flux-1-schnell/v1/getData')) {
+      return new Response(JSON.stringify({ error: 'Insufficient Balance', message: 'The balance is insufficient to proceed with this operation.' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    throw new Error(`Unexpected Pixazo endpoint after fallback trigger: ${url}`);
+  };
+
+  try {
+    const response = await worker.fetch(
+      new Request('https://arena.example/v1/client/image/scene', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contract_version: '1.1',
+          operation: 'sceneImages',
+          payload: {
+            style: 'test',
+            world: {},
+            storyboard: {
+              scenes: [{ scene: 1, beatId: 'beat-fallback', direction: 'test scene', startTime: 0, endTime: 4 }]
+            }
+          }
+        })
+      }),
+      {
+        PIXAZO_API_KEY: 'test-key',
+        AI: {
+          run: async (model: string, input: any) => {
+            assert.equal(model, '@cf/black-forest-labs/flux-1-schnell');
+            assert.equal(input.steps, 4);
+            return { image: 'ZmFrZS1pbWFnZS1ieXRlcw==' };
+          }
+        }
+      }
+    );
+
+    assert.equal(response.status, 200);
+    const data = await response.json();
+    assert.equal(data.ok, true);
+    assert.equal(data.result.images[0].provider, 'cloudflare-workers-ai');
+    assert.equal(data.result.images[0].fallback_used, true);
+    assert.equal(data.result.images[0].image_base64, 'ZmFrZS1pbWFnZS1ieXRlcw==');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
