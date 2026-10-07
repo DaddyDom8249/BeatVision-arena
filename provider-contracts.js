@@ -9,7 +9,7 @@ window.BeatVisionContracts = {
       animate: "/v2/animate",
       assemble: "/v2/assemble"
     },
-    freeImageModels: ["sdxl", "flux-schnell", "sdxl-turbo"],
+    freeImageModels: ["flux-schnell"],
     freeVideoModels: ["ltx-video"]
   },
   operations: {
