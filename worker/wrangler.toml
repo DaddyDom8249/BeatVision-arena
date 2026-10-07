@@ -38,3 +38,6 @@ required = ["EXTERNAL_LANGUAGE_PROVIDER_TOKEN"]
 
 # EXTERNAL_AUDIO_PROVIDER_URL = "https://your-audio-endpoint/v1/audio/transcriptions"
 # EXTERNAL_AUDIO_PROVIDER_MODEL = "your-transcription-model"
+
+[ai]
+binding = "AI"
