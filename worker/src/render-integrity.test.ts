@@ -23,3 +23,12 @@ test('rejects duplicate assets even when timeline positions differ', () => {
     { scene: 2, asset_id: 'same', source_url: 'https://example.com/b.mp4', generation_type: 'GENERATIVE_VIDEO', actual_duration_seconds: 4, timeline_start_seconds: 4, timeline_end_seconds: 8 },
   ], 8), /MEDIA_INTEGRITY_DUPLICATE_ASSET/);
 });
+
+
+test('accepts verified procedural motion as real video coverage', () => {
+  const manifest = buildCoverageManifest([
+    { scene: 1, asset_id: 'procedural-1', source_url: 'https://example.com/procedural.mp4', generation_type: 'PROCEDURAL_MOTION', actual_duration_seconds: 6, timeline_start_seconds: 0, timeline_end_seconds: 6 },
+  ], 6);
+  assert.equal(manifest.coverage_status, 'SUFFICIENT');
+  assert.equal(manifest.clips[0].generation_type, 'PROCEDURAL_MOTION');
+});
