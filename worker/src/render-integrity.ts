@@ -1,4 +1,4 @@
-export type GenerationType = 'GENERATIVE_VIDEO';
+export type GenerationType = 'GENERATIVE_VIDEO' | 'PROCEDURAL_MOTION';
 
 export type ValidatedMotionClip = {
   scene: number;
@@ -37,10 +37,12 @@ export function targetDurationFromPayload(payload: any, fallback: number): numbe
 
 export function inferGenerationType(clip: any): GenerationType | null {
   if (clip?.generation_type === 'GENERATIVE_VIDEO') return 'GENERATIVE_VIDEO';
+  if (clip?.generation_type === 'PROCEDURAL_MOTION') return 'PROCEDURAL_MOTION';
   const provider = String(clip?.provider || '').toLowerCase();
   const source = String(clip?.source || '').toLowerCase();
   const model = String(clip?.model || '').toLowerCase();
   if (provider.includes('pixazo') || model.includes('ltx') || source.includes('pixazo')) return 'GENERATIVE_VIDEO';
+  if (provider.includes('shotstack') && (model.includes('image-motion') || source.includes('procedural'))) return 'PROCEDURAL_MOTION';
   return null;
 }
 
@@ -61,7 +63,7 @@ export function buildCoverageManifest(clips: ValidatedMotionClip[], targetDurati
     if (!assetId) throw new Error(`MEDIA_INTEGRITY_MISSING_ASSET_ID:${scene}`);
     if (!sourceUrl) throw new Error(`MEDIA_INTEGRITY_MISSING_SOURCE_URL:${scene}`);
     if (!Number.isFinite(duration) || duration <= 0) throw new Error(`MEDIA_INTEGRITY_MISSING_ACTUAL_DURATION:${scene}`);
-    if (type !== 'GENERATIVE_VIDEO') throw new Error(`MEDIA_INTEGRITY_UNKNOWN_GENERATION_TYPE:${scene}`);
+    if (type !== 'GENERATIVE_VIDEO' && type !== 'PROCEDURAL_MOTION') throw new Error(`MEDIA_INTEGRITY_UNKNOWN_GENERATION_TYPE:${scene}`);
     if (seenScenes.has(scene)) throw new Error(`MEDIA_INTEGRITY_DUPLICATE_SCENE:${scene}`);
     if (seenAssets.has(assetId)) throw new Error(`MEDIA_INTEGRITY_DUPLICATE_ASSET:${assetId}`);
     if (seenSources.has(sourceUrl)) throw new Error(`MEDIA_INTEGRITY_DUPLICATE_SOURCE:${scene}`);
