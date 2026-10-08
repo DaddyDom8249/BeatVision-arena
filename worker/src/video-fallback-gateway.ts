@@ -18,9 +18,9 @@ function enrichMotionResponse(response:Response,body:any,requestId:string){
       const image=images.find((x:any)=>Number(x?.scene)===scene)||images[index];
       const sourceImageId=String(image?.asset_id||image?.image_id||image?.beatId||image?.beat_id||`scene-${scene}`);
       const providerRequest=String(clip?.pixazo_request_id||`direct-${requestId}-scene-${scene}`);
-      return {...clip,scene,asset_id:String(clip?.asset_id||`motion:${requestId}:scene:${scene}:${providerRequest}`),generation_type:'GENERATIVE_VIDEO',provider:'pixazo',model:clip?.model||'ltx-video',source_image_id:sourceImageId,approval_status:'approved_for_current_pipeline'};
+      const generationType=clip?.generation_type==='PROCEDURAL_MOTION'?'PROCEDURAL_MOTION':'GENERATIVE_VIDEO';const provider=clip?.provider||(generationType==='PROCEDURAL_MOTION'?'shotstack':'pixazo');return {...clip,scene,asset_id:String(clip?.asset_id||`motion:${requestId}:scene:${scene}:${providerRequest}`),generation_type:generationType,provider,model:clip?.model||(generationType==='PROCEDURAL_MOTION'?'image-motion':'ltx-video'),source_image_id:sourceImageId,approval_status:'approved_for_current_pipeline'};
     });
-    data.result={...data.result,clips:enriched,unique_asset_count:new Set(enriched.map((x:any)=>x.asset_id)).size,generation_type:'GENERATIVE_VIDEO'};
+    data.result={...data.result,clips:enriched,unique_asset_count:new Set(enriched.map((x:any)=>x.asset_id)).size,generation_type:enriched.some((x:any)=>x.generation_type==='PROCEDURAL_MOTION')?'PROCEDURAL_MOTION':'GENERATIVE_VIDEO'};
     return new Response(JSON.stringify(data,null,2),{status:response.status,headers:Object.fromEntries(new Headers(response.headers))});
   }).catch(()=>response);
 }
