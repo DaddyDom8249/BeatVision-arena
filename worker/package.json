@@ -9,8 +9,9 @@
     "test:reuse": "node --experimental-strip-types --test src/visual-reuse-detector.test.ts",
     "test:musical-structure": "node --experimental-strip-types --test src/musical-structure.test.ts",
     "test:scene-splitting": "node --experimental-strip-types --test src/scene-splitting.test.ts",
-    "test": "npm run test:storyboard && npm run test:render-integrity && npm run test:composition && npm run test:reuse && npm run test:musical-structure && npm run test:scene-splitting && npm run test:beatvision-bridge && npm run test:scene-image-routing",
+    "test": "npm run test:storyboard && npm run test:render-integrity && npm run test:composition && npm run test:reuse && npm run test:musical-structure && npm run test:scene-splitting && npm run test:beatvision-bridge && npm run test:scene-image-routing && npm run test:animation-jobs",
     "test:beatvision-bridge": "node --experimental-strip-types --test src/beatvision-bridge.test.ts",
-    "test:scene-image-routing": "node --experimental-strip-types --test src/arena-entry-flux-schnell.test.ts"
+    "test:scene-image-routing": "node --experimental-strip-types --test src/arena-entry-flux-schnell.test.ts",
+    "test:animation-jobs": "node --experimental-strip-types --test src/animation-jobs.test.ts"
   }
 }

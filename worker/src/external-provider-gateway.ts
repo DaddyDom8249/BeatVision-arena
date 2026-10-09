@@ -1,4 +1,4 @@
-import { compactAudio, normalizeVisualBeats, toStoryboard, visualBeatSystemPrompt } from './visual-beat-engine';
+import { compactAudio, normalizeVisualBeats, toStoryboard, visualBeatSystemPrompt } from './visual-beat-engine.ts';
 
 const CONTRACT_VERSION = '1.1';
 const LANGUAGE_TIMEOUT_MS = 60000;

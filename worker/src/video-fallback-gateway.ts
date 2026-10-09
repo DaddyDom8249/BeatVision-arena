@@ -1,7 +1,7 @@
-import pixazo from './pixazo-media-gateway-fixed';
-import motionResilient from './pixazo-motion-resilience';
-import shotstack from './shotstack-gateway';
-import externalProvider from './external-provider-gateway';
+import pixazo from './pixazo-media-gateway-fixed.ts';
+import motionResilient from './pixazo-motion-resilience.ts';
+import shotstack from './shotstack-gateway.ts';
+import externalProvider from './external-provider-gateway.ts';
 
 function cors(r:Request,e:any){const o=r.headers.get('Origin')||'';const allowed=String(e.ALLOWED_ORIGIN||'').split(',').map((x:string)=>x.trim()).filter(Boolean);const h:Record<string,string>={'Vary':'Origin','Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Headers':'Content-Type,X-BeatVision-Contract,Authorization,X-BeatVision-Request','Access-Control-Max-Age':'86400'};if(o&&allowed.includes(o))h['Access-Control-Allow-Origin']=o;return h;}
 function json(r:Request,e:any,d:unknown,status=200){return new Response(JSON.stringify(d,null,2),{status,headers:{'Content-Type':'application/json',...cors(r,e)}});}

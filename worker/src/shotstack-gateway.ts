@@ -1,4 +1,4 @@
-import { assertSufficientCoverage, buildCoverageManifest, targetDurationFromPayload, COVERAGE_EPSILON_SECONDS, type ValidatedMotionClip } from './render-integrity';
+import { assertSufficientCoverage, buildCoverageManifest, targetDurationFromPayload, COVERAGE_EPSILON_SECONDS, type ValidatedMotionClip } from './render-integrity.ts';
 
 const BASE='https://api.shotstack.io';
 const STAGE=`${BASE}/edit/stage`;
