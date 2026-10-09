@@ -1,4 +1,4 @@
-import pixazo from './pixazo-media-gateway-fixed';
+import pixazo from './pixazo-media-gateway-fixed.ts';
 
 const RETRYABLE = /prompt not found|provider ended this request without producing output|job ERROR|502|503|504|temporarily unavailable|rate limit|too many requests/i;
 const PIXAZO_UNAVAILABLE = /Pixazo ltx-video (?:402|403)|Add a card to use your monthly Pixazo Free Tier|insufficient balance|balance is insufficient/i;

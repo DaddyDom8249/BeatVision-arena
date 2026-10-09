@@ -1,4 +1,4 @@
-import { resolveShotstackSource } from './shotstack-gateway';
+import { resolveShotstackSource } from './shotstack-gateway.ts';
 
 const BASE = 'https://gateway.pixazo.ai';
 const STATUS = `${BASE}/v2/requests/status/`;

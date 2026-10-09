@@ -28,7 +28,7 @@ const beatEngine=read('worker/src/visual-beat-engine.ts');
 for(const token of ['VisualBeat','compactAudio','visualBeatSystemPrompt','normalizeVisualBeats','coverage_ratio','semantic_grounding_failures','semantic_duplicate_rate','unexplained_reuse','reusePolicy'])if(!beatEngine.includes(token))throw new Error(`Visual beat engine missing ${token}.`);
 if(!beatEngine.includes('lyricMeaning')||!beatEngine.includes('narrativePurpose')||!beatEngine.includes('characterState')||!beatEngine.includes('visualContinuityRequirements'))throw new Error('Visual beat metadata is incomplete.');
 const language=read('worker/src/external-provider-gateway.ts');
-if(!language.includes("import { compactAudio, normalizeVisualBeats, toStoryboard, visualBeatSystemPrompt } from './visual-beat-engine';"))throw new Error('Storyboard gateway is not using the visual beat engine.');
+if(!language.includes("import { compactAudio, normalizeVisualBeats, toStoryboard, visualBeatSystemPrompt } from './visual-beat-engine.ts';"))throw new Error('Storyboard gateway is not using the visual beat engine.');
 if(!language.includes('visual_coverage_insufficient'))throw new Error('Storyboard coverage quality gate is missing.');
 if(!language.includes('BeatVision quality gate'))throw new Error('Storyboard failure must explain why reuse cannot silently fill gaps.');
 const arena=read('worker/src/arena-entry.ts');
@@ -73,7 +73,7 @@ if(!validated.includes('export { BeatVisionAnimationJob }'))throw new Error('Dur
 const fallback=read('worker/src/video-fallback-gateway.ts');
 if(fallback.includes('fallback:{')||fallback.includes('shotstack-camera-motion'))throw new Error('Fallback capability is still advertised by the active Arena gateway.');
 if(!fallback.includes('enrichMotionResponse')||!fallback.includes('approval_status'))throw new Error('Motion provenance enrichment is missing from the active Arena gateway.');
-for(const token of ['approval_status','generation_type:\'GENERATIVE_VIDEO\'','asset_id'])if(!fallback.includes(token))throw new Error(`Motion output identity contract missing ${token}.`);
+for(const token of ['approval_status',"'GENERATIVE_VIDEO'","'PROCEDURAL_MOTION'",'generation_type:generationType','asset_id'])if(!fallback.includes(token))throw new Error(`Motion output identity contract missing ${token}.`);
 const wrangler=read('worker/wrangler.toml');
 if(!wrangler.includes('main = "src/arena-validated-entry.ts"'))throw new Error('Wrangler entrypoint does not match the deployed validated Worker.');
 console.log('STATIC AUDIT PASS');

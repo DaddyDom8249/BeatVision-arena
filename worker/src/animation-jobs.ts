@@ -30,7 +30,7 @@ export class BeatVisionAnimationJob{
   async renderShotstackMotion(source:string,duration:number,scene:number){
     const key=String(this.env.SHOTSTACK_API_KEY||'').trim();
     if(!key)throw new Error('Shotstack procedural motion fallback is not configured.');
-    if(!/^https?:\\/\\//i.test(source))throw new Error('Shotstack procedural motion requires an HTTPS source image.');
+    if(!/^https?:\/\//i.test(source))throw new Error('Shotstack procedural motion requires an HTTPS source image.');
     const effects=['zoomInSlow','zoomOutSlow','slideLeftSlow','slideRightSlow','slideUpSlow','slideDownSlow'];
     const effect=effects[Math.max(0,scene-1)%effects.length];
     const edit={timeline:{tracks:[{clips:[{asset:{type:'image',src:source},start:0,length:duration,fit:'crop',effect}]}]},output:{format:'mp4',resolution:'hd',aspectRatio:'16:9',fps:25}};
@@ -47,7 +47,7 @@ export class BeatVisionAnimationJob{
       const result=data?.response||data?.data||{};const status=String(result.status||'').toLowerCase();
       if(status==='done'){
         const url=String(result.url||'').trim();const actual=Number(result.duration||duration);
-        if(!/^https?:\\/\\//i.test(url))throw new Error('Shotstack procedural motion completed without a video URL.');
+        if(!/^https?:\/\//i.test(url))throw new Error('Shotstack procedural motion completed without a video URL.');
         if(!(actual>0)||Math.abs(actual-duration)>0.35)throw new Error('Shotstack procedural motion duration mismatch: expected='+duration.toFixed(3)+' actual='+(Number.isFinite(actual)?actual.toFixed(3):'unknown'));
         return {video_url:url,provider:'shotstack',model:'image-motion',generation_type:'PROCEDURAL_MOTION',source:'Shotstack procedural image motion fallback',requested_duration_seconds:duration,duration_seconds:actual,render_id:renderId,effect};
       }
@@ -72,9 +72,10 @@ export class BeatVisionAnimationJob{
           const fallbackEligible=/Pixazo ltx-video (?:402|403)|Add a card to use your monthly Pixazo Free Tier|insufficient balance|balance is insufficient/i.test(msg);
           if(!fallbackEligible)throw error;
           await this.event(job,'pixazo_unavailable_fallback',{provider:'pixazo_ltx',error:msg.slice(0,1200),fallback_provider:'shotstack',fallback_type:'PROCEDURAL_MOTION'});
-          const fallback=await this.renderShotstackMotion(source,duration,sn);
+          const fallbackDuration=Math.max(3,Number(scene?.duration_seconds)||duration);
+          const fallback=await this.renderShotstackMotion(source,fallbackDuration,sn);
           const assetId='motion:'+job.job_id+':scene:'+sn+':shotstack:'+fallback.render_id;
-          await this.pushClipOnce(job,{scene:sn,status:'animated',video_url:fallback.video_url,source:fallback.source,provider:fallback.provider,model:fallback.model,generation_type:fallback.generation_type,asset_id:assetId,requested_duration_seconds:duration,duration_seconds:fallback.duration_seconds,shotstack_render_id:fallback.render_id,effect:fallback.effect});
+          await this.pushClipOnce(job,{scene:sn,status:'animated',video_url:fallback.video_url,source:fallback.source,provider:fallback.provider,model:fallback.model,generation_type:fallback.generation_type,asset_id:assetId,requested_duration_seconds:fallbackDuration,duration_seconds:fallback.duration_seconds,shotstack_render_id:fallback.render_id,effect:fallback.effect});
           job.index++;job.retries=0;await this.event(job,'scene_completed',{provider:'shotstack',generation_type:'PROCEDURAL_MOTION',asset_id:assetId,source:'pixazo_unavailable_fallback',duration_seconds:fallback.duration_seconds,effect:fallback.effect});await this.save(job);await this.state.storage.setAlarm(Date.now());return;
         }
       }
