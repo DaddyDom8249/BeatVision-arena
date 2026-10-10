@@ -136,6 +136,11 @@ async function generateCloudflareSceneImage(e: any, prompt: string, sceneNumber:
 }
 
 async function generateSceneImage(key: string, prompt: string, sceneNumber: number, e: any) {
+  // Prefer the already configured Workers AI path without probing Pixazo
+  // billing. A free-allocation failure must not submit to another provider.
+  if (e?.AI && typeof e.AI.run === 'function') {
+    return { ...await generateCloudflareSceneImage(e, prompt, sceneNumber), fallback_used: false };
+  }
   // Primary: Pixazo Flux Schnell. Fallback: Cloudflare Workers AI Flux Schnell.
   // Both are free-only paths. Never silently substitute a paid/unknown model.
   try {
