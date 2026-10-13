@@ -12,7 +12,7 @@ const active=required.map(read).join('\n');
 for(const banned of ['HF_API_TOKEN','pollinations','gemini','sd3-5','sd3.5'])if(active.toLowerCase().includes(banned.toLowerCase()))throw new Error(`Forbidden active-path reference found: ${banned}`);
 for(const file of required)if(file!=='worker/src/video-fallback-gateway.ts'&&read(file).toLowerCase().includes('huggingface'))throw new Error(`Unapproved Hugging Face integration in active file: ${file}`);
 const zeroGpu=read('worker/src/hf-zerogpu-video.ts');
-for(const safeguard of ['WAN_ZERO_GPU_FREE_ACCOUNT_NOT_VERIFIED', 'profile?.isPro !== false', 'GATEWAY_TOKEN', 'APPROVED_SIGNED_SCENE_IMAGE_REQUIRED','awaiting_creator_review'])if(!zeroGpu.includes(safeguard))throw new Error(`ZeroGPU free-only safety check missing: ${safeguard}`);
+for(const safeguard of ['WAN_ZERO_GPU_FREE_ACCOUNT_NOT_VERIFIED', 'identity?.isPro!==false', 'GATEWAY_TOKEN', 'APPROVED_SIGNED_SCENE_IMAGE_REQUIRED','awaiting_creator_review'])if(!zeroGpu.includes(safeguard))throw new Error(`ZeroGPU free-only safety check missing: ${safeguard}`);
 const providerRouter=read('worker/src/video-fallback-gateway.ts');
 if(!providerRouter.includes("path==='/v1/video/wan-zero'"))throw new Error('Explicit isolated Wan ZeroGPU route missing.');
 const contracts=read('provider-contracts.js');
