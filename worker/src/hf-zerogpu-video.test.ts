@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import video from "./hf-zerogpu-video.ts";
+import fs from "node:fs";
 
 const BASE="https://beatvision.example/v1/video/wan-zero",secret="internal_gateway_secret";
 const env={GATEWAY_TOKEN:secret,HF_VIDEO_TOKEN:"hf_free_only"};
@@ -125,4 +126,11 @@ test("poll cannot accept unknown host in completion payload",async()=>{
     const response=await video.fetch(pollRequest(),env);
     assert.equal(response.status,503);
   });
+});
+
+test("both validated entry and provider gateway route status GET to ZeroGPU",()=>{
+  const entry=fs.readFileSync(new URL("./arena-validated-entry.ts",import.meta.url),"utf8");
+  const router=fs.readFileSync(new URL("./video-fallback-gateway.ts",import.meta.url),"utf8");
+  assert.match(entry,/path\.startsWith\('\/v1\/video\/wan-zero\/jobs\/'\)/);
+  assert.match(router,/path\.startsWith\('\/v1\/video\/wan-zero\/jobs\/'\)/);
 });

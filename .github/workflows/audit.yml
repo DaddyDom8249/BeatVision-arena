@@ -2,7 +2,7 @@ name: BeatVision Arena Audit
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/free-wan-zerogpu-motion-20261013]
   pull_request:
     branches: [main]
   workflow_dispatch:

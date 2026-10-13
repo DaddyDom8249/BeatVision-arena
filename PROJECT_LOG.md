@@ -31,3 +31,8 @@
 **Safety:** Validate image source host, signed storage prefix and MIME, max 8 MiB input, free `whoami-v2.isPro===false` before sending, 0.5–3s duration, one owner-approved image, bounded uploads and queue requests. No Pixazo billing, no retries that enqueue duplicate video jobs, no automatically approved media.
 
 **Verification:** Dedicated mocked tests now explicitly run in GitHub Arena Audit; live remote Space API acceptance remains unverified, so merge and deployment stay gated until strict free identity and production proof. No paid calls or production changes.
+
+
+## 2026-10-13 — Complete Wan ZeroGPU status route + new-head CI
+
+A final route audit found that the validated-entry forwarded GET status, but the inner provider gateway lacked its explicit `/v1/video/wan-zero/jobs/` dispatch. Fixed both routing layers and added dedicated source regression coverage. Enabled safe, no-provider-request GitHub Arena Audit on the feature branch to obtain evidence for the exact amended commit; previously passing CI was from the old synchronous adapter. No production deployment, provider job, approval writes, paid APIs, or automatic retry.
