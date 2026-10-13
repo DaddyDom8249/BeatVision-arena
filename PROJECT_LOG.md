@@ -20,3 +20,14 @@
 **Change:** A separate explicit model `wan2.2-zerogpu` route checks authenticated gateway requests, one approved short scene and signed source image, and Hugging Face `whoami-v2.isPro === false` before any generation. It calls only the public Wan2.2 ZeroGPU Space; returns real MP4 URLs as GENERATIVE_VIDEO awaiting creator review, never auto-approves. A 3-second cap prevents false full-song coverage; no paid fallback/retry. New mocked free-account, failure, identity, source and duration regressions are added to Worker npm test.
 
 **Limitations:** Exact-head tests and live ZeroGPU queue integration not yet verified. HF public Space may reject API calls, change endpoints, or exhaust daily quota; return unavailable rather than claiming free motion. No production deploy, DB write, approved asset changes, paid provider calls, or merge. Existing Ghast scenes are much longer than 3 seconds; this adapter is a safe pilot, not a full-scene replacement. Groq TTS is a separate component and not silently enabled.
+
+
+## 2026-10-13 — Gradio remote-image upload and non-duplicating Wan job polling
+
+**Fix:** Replace the inaccurate direct signed-URL-as-server-path Gradio image input with a server-side bounded fetch of the owner-approved Supabase image and a Gradio `/gradio_api/upload` multipart upload. Submit `/gradio_api/call/generate_video` once with an explicit `gradio.FileData` input; return a provider event id without claiming completion.
+
+**Polling:** New authenticated `GET /v1/video/wan-zero/jobs/:eventId` route polls Gradio's SSE result under a 12s timeout and reports processing on timeout; only confirmed completed MP4 from the same trusted Space host receives GENERATIVE_VIDEO provenance, awaiting creator review. Validated Worker entry routes GET before the old POST-only parser.
+
+**Safety:** Validate image source host, signed storage prefix and MIME, max 8 MiB input, free `whoami-v2.isPro===false` before sending, 0.5–3s duration, one owner-approved image, bounded uploads and queue requests. No Pixazo billing, no retries that enqueue duplicate video jobs, no automatically approved media.
+
+**Verification:** Dedicated mocked tests now explicitly run in GitHub Arena Audit; live remote Space API acceptance remains unverified, so merge and deployment stay gated until strict free identity and production proof. No paid calls or production changes.
