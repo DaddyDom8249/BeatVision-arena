@@ -217,6 +217,12 @@ export default {
       return json(r, { ok: false, error: 'Unauthorized' }, 401);
     }
 
+    // Gradio image-to-video status is a GET with no JSON body. Route it
+    // before the legacy POST parser so polling never receives a false 400.
+    if (path === '/v1/video/wan-zero' || path.startsWith('/v1/video/wan-zero/jobs/')) {
+      return providerGateway.fetch(r, env);
+    }
+
     // Persistent animation status is a GET with no JSON body. Route the job
     // endpoint before the generic POST/body validation in arena-entry so the
     // poll request cannot be rejected as an empty/invalid JSON request.

@@ -1,7 +1,7 @@
 export const BEATVISION_BRIDGE_CONTRACT = '2.0';
 
 const FREE_IMAGE_MODELS = new Set(['flux-schnell']);
-const FREE_VIDEO_MODELS = new Set(['ltx-video']);
+const FREE_VIDEO_MODELS = new Set(['ltx-video', 'wan2.2-zerogpu']);
 
 const text = (value: unknown, max = 12000) => String(value ?? '').trim().slice(0, max);
 
@@ -224,7 +224,7 @@ export async function handleBeatVisionBridge(
   const legacy = toLegacyPayload(payload, operation, model);
   const internalPath =
     operation === 'sceneImage' ? '/v1/image/scenes' :
-    operation === 'animate' ? '/v1/video/animate' :
+    operation === 'animate' ? (model === 'wan2.2-zerogpu' ? '/v1/video/wan-zero' : '/v1/video/animate') :
     '/v1/video/assemble';
 
   const internal = new Request(new URL(internalPath, r.url), {
@@ -272,7 +272,7 @@ export function beatVisionBridgeCapabilities(env: any) {
     transcription: { provider: 'groq-whisper', authoritative: true, optional: true },
     world: { provider: 'beatvision-world', authoritative: true },
     image: { provider: 'pixazo', models: [...FREE_IMAGE_MODELS] },
-    video: { provider: 'pixazo', models: [...FREE_VIDEO_MODELS] },
+    video: { provider: 'pixazo-or-hf-zerogpu', models: [...FREE_VIDEO_MODELS], hf_zerogpu_configured: Boolean(env.HF_VIDEO_TOKEN), paid_or_unknown_cost_models_never_auto_selected: true },
     assembly: { provider: 'shotstack-sandbox', cost_class: 'free' },
   };
 }

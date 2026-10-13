@@ -2,7 +2,7 @@ name: BeatVision Arena Audit
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/free-wan-zerogpu-motion-20261013]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -43,6 +43,9 @@ jobs:
 
       - name: BeatVision bridge regression tests
         run: node --experimental-strip-types --test worker/src/beatvision-bridge.test.ts
+
+      - name: Strict-free Gradio upload submit and polling regressions
+        run: node --experimental-strip-types --test worker/src/hf-zerogpu-video.test.ts
 
       - name: Persistent motion URL and full-duration regression tests
         run: node --experimental-strip-types --test worker/src/animation-jobs.test.ts
