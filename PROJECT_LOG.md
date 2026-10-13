@@ -11,3 +11,12 @@
 **Verification:** Before the timing repair, the 14-second fallback test reproduces 5.5 seconds. After repair, all 30 npm Worker tests and two character-continuity tests pass. Both Worker entry bundles build. Pipeline coherence, static architecture, security, persistent animation state, Termux safety and adversarial render-integrity audits pass. Provider calls in regression tests are mocked; no real media job or paid/unknown-cost request was made.
 
 **Publication and live verification:** Pending at this commit. GitHub audit must pass before merge. Verify deploy workflow success, exact serving version/commit tag, unchanged Durable Object namespace and real failure-path health after release. Existing live animation namespace d6bf26572a32437aa95d86e30e2d84d4 and migration tag v2 are recorded for preservation. Zero-cost generation evidence remains unverified.
+
+
+## 2026-10-13 — Free Wan ZeroGPU motion adapter (draft, not deployed)
+
+**Why:** The live Worker had HF_VIDEO_TOKEN bound but /v2/animate routed only to Pixazo; Pixazo API free tier requires an initial $10 wallet top-up, contrary to strict zero-payment policy. Existing fallback produces Shotstack PROCEDURAL_MOTION/image-motion, not generative movement.
+
+**Change:** A separate explicit model `wan2.2-zerogpu` route checks authenticated gateway requests, one approved short scene and signed source image, and Hugging Face `whoami-v2.isPro === false` before any generation. It calls only the public Wan2.2 ZeroGPU Space; returns real MP4 URLs as GENERATIVE_VIDEO awaiting creator review, never auto-approves. A 3-second cap prevents false full-song coverage; no paid fallback/retry. New mocked free-account, failure, identity, source and duration regressions are added to Worker npm test.
+
+**Limitations:** Exact-head tests and live ZeroGPU queue integration not yet verified. HF public Space may reject API calls, change endpoints, or exhaust daily quota; return unavailable rather than claiming free motion. No production deploy, DB write, approved asset changes, paid provider calls, or merge. Existing Ghast scenes are much longer than 3 seconds; this adapter is a safe pilot, not a full-scene replacement. Groq TTS is a separate component and not silently enabled.
