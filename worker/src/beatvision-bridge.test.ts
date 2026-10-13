@@ -8,7 +8,9 @@ test('BeatVision bridge advertises the free execution boundary', () => {
   assert.equal(caps.source_of_truth, 'beatvision');
   assert.equal(caps.cost_class, 'free');
   assert.deepEqual(caps.image.models, ['flux-schnell']);
-  assert.deepEqual(caps.video.models, ['ltx-video']);
+  assert.deepEqual(caps.video.models, ['ltx-video', 'wan2.2-zerogpu']);
+  assert.equal(caps.video.hf_zerogpu_configured, false);
+  assert.equal(beatVisionBridgeCapabilities({ HF_VIDEO_TOKEN: 'bound' }).video.hf_zerogpu_configured, true);
   assert.equal(caps.assembly.provider, 'shotstack-sandbox');
 });
 
