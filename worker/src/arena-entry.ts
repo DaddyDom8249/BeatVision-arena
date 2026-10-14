@@ -62,7 +62,7 @@ const scenePrompt = (payload: any, scene: any, index: number, total: number) => 
 };
 
 async function pixazoPost(path: string, key: string, body: any) {
-  const response = await fetch(`${BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', 'Ocp-Apim-Subscription-Key': key }, body: JSON.stringify(body) });
+  const response = await fetch(`${BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', 'Ocp-Apim-Subscription-Key': key }, body: JSON.stringify(body), signal: AbortSignal.timeout(30000) });
   const text = await response.text(); let data: any; try { data = JSON.parse(text); } catch { data = { raw: text }; }
   if (!response.ok) throw new Error(`Pixazo ${response.status} at ${path}: ${String(data?.message || data?.error || text).slice(0, 1600)}`);
   return data;
@@ -82,7 +82,8 @@ async function pixazoStatus(key: string, requestId: string, model: string) {
           'Ocp-Apim-Subscription-Key': key,
           'Cache-Control': 'no-cache'
         },
-        body: JSON.stringify({ requestId })
+        body: JSON.stringify({ requestId }),
+        signal: AbortSignal.timeout(20000)
       });
       const text = await response.text();
       let data: any;
@@ -100,7 +101,8 @@ async function pixazoStatus(key: string, requestId: string, model: string) {
       }
     } else {
       const response = await fetch(`${BASE}/v2/requests/status/${encodeURIComponent(requestId)}`, {
-        headers: { 'Ocp-Apim-Subscription-Key': key, 'Cache-Control': 'no-cache' }
+        headers: { 'Ocp-Apim-Subscription-Key': key, 'Cache-Control': 'no-cache' },
+        signal: AbortSignal.timeout(20000)
       });
       const text = await response.text();
       let data: any;

@@ -65,7 +65,8 @@ async function call(path: string, key: string, body: any, model: string) {
       'Cache-Control': 'no-cache',
       'Ocp-Apim-Subscription-Key': key
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(30000)
   });
   const text = await response.text();
   let data: any;
@@ -80,7 +81,8 @@ async function wait(key: string, requestId: string, model: string) {
   const deadline = Date.now() + LTX_TIMEOUT_MS;
   while (Date.now() < deadline) {
     const response = await fetch(`${STATUS}${encodeURIComponent(requestId)}`, {
-      headers: { 'Ocp-Apim-Subscription-Key': key, 'Cache-Control': 'no-cache' }
+      headers: { 'Ocp-Apim-Subscription-Key': key, 'Cache-Control': 'no-cache' },
+      signal: AbortSignal.timeout(20000)
     });
     const text = await response.text();
     let data: any;
