@@ -61,3 +61,12 @@ Mobile production evidence: Gradio accepted a job and subsequently reported an S
 **Code fix, not deployed:** The outer validated Worker and inner Arena handler now require a configured server-side GATEWAY_TOKEN with matching Bearer header for all /v1/client paths, before any provider call or body validation. Legacy anonymous browser consumers will be denied; authenticated trusted-backend calls can continue. No approved assets, provider secrets, model entitlements or production settings are modified.
 
 **Regressions:** Denial for absent/wrong token and missing configuration on scene and reference routes, both handler layers, spoofed-IP denial and retention of authenticated Flux Schnell mocking. Tests do not execute real provider calls. Await exact PR CI. Owner must explicitly authorize merge/deployment.
+
+
+## 2026-10-13 — Final-video output media validation (review-only)
+
+**Finding:** Shotstack status returned render_integrity PASS using only provider duration; the output URL was not probed. This can falsely mark absent audio, corrupt/non-MP4 file, or an unrelated duration as complete.
+
+**Source fix:** On 'done', allow only the observed Shotstack sandbox S3 host, probe the output using Shotstack's existing /v1/probe service, require MP4 container, actual video plus audio streams, and probed duration within 0.35 seconds of the authoritative caller's target. Fail closed with stable error codes otherwise. Return media_validation only for verified media. No raw provider errors or stack traces returned. Mock tests assert valid media, missing audio, HTML container, wrong probe duration, probe unavailable, malicious output URL.
+
+**Gates:** No provider API requests made during tests, no production deploy. New probe call's billing allowance is NOT VERIFIED and must be approved as $0 before deployment. Supabase final_videos write-hardening PR is required to complete the workflow. Signed S3 URL may expire; finished downloadable video retention is a separate outstanding problem.
