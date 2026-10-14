@@ -75,3 +75,10 @@ Mobile production evidence: Gradio accepted a job and subsequently reported an S
 ## 2026-10-13 — Probe endpoint correction
 
 Current official Shotstack API documentation specifies GET /edit/stage/probe/:encodedAssetUrl. Draft Worker still used legacy /v1/probe; corrected to the documented staging route, and mocks assert the new request path. No live API request was made. A historical Shotstack answer states the inspector uses no credits; current account entitlements remain unverified.
+
+
+## 2026-10-13 — Consume BeatVision consistency references (BeatVision PR #94)
+
+**Change (not deployed):** `/v2/scene-image` now folds `scene.consistency_directives` into the image prompt (always) and forwards `references` to the scene-image handler. Reference images are applied only via Cloudflare Workers AI `@cf/black-forest-labs/flux-2-klein-4b` (multi-reference, up to 4 inputs, each ≤512×512 per Cloudflare docs) and only when the owner sets `CF_REFERENCE_IMAGE_MODEL_ENABLED="true"`. Default is OFF: jobs stay on text-only Flux Schnell and report `references.applied=false` with a reason. Reference fetches: Supabase signed `visual-assets` host/path only, 8 s timeout, redirect `manual` + reject 3xx, PNG/JPEG/WebP only, 4 MB cap, dimension check. Signed URLs are never logged or returned. Free-model allowlist unchanged; jobs without the new fields are unchanged.
+
+**Cost status:** flux-2-klein-4b is billed in Neurons like the existing flux-1-schnell fallback: free within the 10,000 Neurons/day allocation; on Workers Paid, overage is billed ($0.011/1k Neurons). Account plan NOT VERIFIED, hence default OFF. No live provider calls made.

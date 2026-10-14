@@ -146,6 +146,7 @@ function toLegacyPayload(payload: any, operation: string, model: string | null) 
         visual_beats: operation === 'assemble' && Array.isArray(payload?.storyboard?.visual_beats) ? payload.storyboard.visual_beats : [storyboardScene],
       },
       images: payload.images || undefined,
+      consistency_references: operation === 'sceneImage' && payload.references && typeof payload.references === 'object' ? payload.references : undefined,
       motion: payload.motion || undefined,
       audio_data: payload.audio_data || payload.audio_base64 || undefined,
       generation: {
@@ -154,6 +155,19 @@ function toLegacyPayload(payload: any, operation: string, model: string | null) 
         source: 'beatvision',
       },
     },
+  };
+}
+
+// Honest, URL-free summary of whether references actually conditioned the image.
+function referenceReport(payload: any, data: any) {
+  const outcome = data?.result?.images?.[0]?.references;
+  const applied = outcome?.applied === true;
+  return {
+    received: true,
+    applied,
+    model: applied ? outcome.model : null,
+    reason: String(outcome?.reason || (data?.ok === false ? 'generation_failed' : 'not_reported')),
+    applied_count: applied ? Number(outcome.applied_count || 0) : 0,
   };
 }
 
@@ -259,6 +273,8 @@ export async function handleBeatVisionBridge(
       generation_model: model,
       cost_class: 'free',
       source_of_truth: 'beatvision',
+      ...(operation === 'sceneImage' && payload?.references !== undefined ? { consistency_references: referenceReport(payload, data) } : {}),
+      ...(operation === 'sceneImage' && Array.isArray(payload?.scene?.consistency_directives) ? { consistency_directives_applied_to_prompt: payload.scene.consistency_directives.filter((d: unknown) => String(d ?? '').trim()).length > 0 } : {}),
     },
   }, null, 2), { status: response.status, headers });
 }
