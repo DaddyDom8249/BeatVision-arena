@@ -57,15 +57,36 @@ function providerVideoUrl(value: any): string {
       ||!/\/(?:gradio_api\/)?file=/.test(url.pathname))throw Error("WAN_ZERO_GPU_VIDEO_URL_UNTRUSTED");
   return url.href;
 }
-function parseEvent(input:string) {
+// Gradio SSE errors are terminal. Never expose raw third-party tracebacks,
+// stack paths, credentials or error payloads to browser clients.
+function classifyProviderFailure(raw:string) {
+  const value=raw.toLowerCase().slice(0,2500);
+  if(/quota|daily limit|credits|gpu.?time|free tier|allowance/.test(value))
+    return {failure_category:"free_quota",message:"The Hugging Face free GPU allowance is unavailable or exhausted. No paid fallback was used."};
+  if(/queue full|capacity|overloaded|too many requests|busy|gpu unavailable/.test(value))
+    return {failure_category:"capacity",message:"The free Hugging Face queue is currently unavailable. This job failed."};
+  if(/input image|invalid image|upload|image format|pil\.|cannot identify image|file not found/.test(value))
+    return {failure_category:"input",message:"Hugging Face could not read the approved source image."};
+  if(/memory|cuda|oom/.test(value))
+    return {failure_category:"gpu_runtime",message:"Hugging Face ran out of GPU resources rendering the preview."};
+  return {failure_category:"provider_runtime",message:"Hugging Face reported a render failure. No AI clip was produced."};
+}
+function parseEvent(input:string): {status:"completed";video:string}|{status:"failed";failure_category:string;message:string}|null {
   for(const part of input.split(/\r?\n\r?\n/)) {
-    const event=/^event:\s*([a-z_]+)/m.exec(part)?.[1];
+    const event=/^event:\s*([a-z_]+)\s*$/m.exec(part)?.[1];
     if(event!=="complete"&&event!=="error")continue;
-    if(event==="error")throw Error("WAN_ZERO_GPU_PROVIDER_ERROR");
     const raw=/^data:\s*(.+)$/m.exec(part)?.[1]||"";
+    if(event==="error") {
+      let value:any=raw;
+      try{value=JSON.parse(raw)}catch{/* Provider may send a plain text error. */}
+      const detail=typeof value==="string"?value:
+        (typeof value?.error==="string"?value.error:
+         typeof value?.message==="string"?value.message:raw);
+      return {status:"failed",...classifyProviderFailure(String(detail))};
+    }
     let value:any;
     try{value=JSON.parse(raw)}catch{throw Error("WAN_ZERO_GPU_BAD_COMPLETION")}
-    return providerVideoUrl(value);
+    return {status:"completed",video:providerVideoUrl(value)};
   }
   return null;
 }
@@ -145,8 +166,12 @@ async function poll(eventId:string,token:string) {
     throw error;
   }
   if(sse.length>500000)throw Error("WAN_ZERO_GPU_EVENT_TOO_LARGE");
-  const video=parseEvent(sse);
-  if(!video)return reply({ok:true,status:"processing",event_id:eventId},202);
+  const outcome=parseEvent(sse);
+  if(!outcome)return reply({ok:true,status:"processing",event_id:eventId},202);
+  if(outcome.status==="failed")return reply({ok:true,status:"failed",event_id:eventId,
+    error_code:"WAN_ZERO_GPU_PROVIDER_ERROR",failure_category:outcome.failure_category,
+    error:outcome.message,terminal:true,retry_automatically:false});
+  const video=outcome.video;
   return reply({ok:true,contract_version:"1.1",capability:"video",provider:"hf-zerogpu",
     model:MODEL,status:"completed",cost_class:"free",generation_type:"GENERATIVE_VIDEO",
     result:{status:"completed",video_url:video,scene_count:1,generation_type:"GENERATIVE_VIDEO",

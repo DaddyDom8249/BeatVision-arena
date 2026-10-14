@@ -47,3 +47,8 @@ A final route audit found that the validated-entry forwarded GET status, but the
 **Repair:** Switch to `redirect:"manual"` and fail closed on any 3xx or `opaqueredirect` response before any image bytes are read or uploaded. Keep signed-source host, approved image provenance, size/type limits, JWT/API checks and no paid fallback unchanged. Add regression coverage asserting the Worker-safe redirect mode and rejecting both ordinary and opaque redirects without any Gradio submission.
 
 **Verification:** Awaiting exact-commit CI and Worker production deployment. Real generative MP4 still unverified; this only fixes the confirmed runtime blocker. No paid provider calls or creator asset mutations.
+
+
+## 2026-10-13 — Fix terminal WAN_ZERO_GPU_PROVIDER_ERROR
+
+Mobile production evidence: Gradio accepted a job and subsequently reported an SSE event:error. The Arena returned a generic 503, while the Studio retained a stuck queued ticket. New parser returns terminal status failed with an allowlisted failure category and safe message; no raw traceback disclosure, no automatic requeue, no paid fallback and no approved asset mutation. Live underlying model error still unverified.
