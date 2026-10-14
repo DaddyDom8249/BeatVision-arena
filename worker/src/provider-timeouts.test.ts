@@ -15,3 +15,9 @@ for (const file of ['shotstack-gateway.ts', 'pixazo-media-gateway-fixed.ts', 'ar
     }
   });
 }
+
+test('shotstack assemble errors do not return raw provider bodies', async () => {
+  const src = await readFile(new URL('./shotstack-gateway.ts', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /provider_response:providerResponse/);
+  assert.doesNotMatch(src, /error:msg\.slice\(0,2000\)/);
+});
