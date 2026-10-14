@@ -14,6 +14,41 @@ const RATE_LIMIT_WINDOW_MS = 10000; // 10 seconds per client IP
 // JSON parsing. Generous enough for base64 reference images.
 export const MAX_REQUEST_BYTES = 8 * 1024 * 1024;
 
+/**
+ * Read directly from the original stream, not from request.clone(): the
+ * latter tees the stream and can buffer an unlimited amount for its unread
+ * branch. Stop at the first byte over the cap, including chunked requests
+ * without a Content-Length header. Downstream handlers receive a new Request
+ * containing only the successfully bounded body.
+ */
+async function readBoundedRequestBody(r: Request): Promise<Request | null> {
+  if (!r.body) return r;
+  const reader = r.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      length += value.byteLength;
+      if (length > MAX_REQUEST_BYTES) {
+        void reader.cancel().catch(() => undefined);
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const body = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new Request(r, { body });
+}
+
 // Per-request env so json() can apply the ALLOWED_ORIGIN allowlist instead of
 // reflecting whatever Origin the caller sent.
 const requestEnv = new WeakMap<Request, any>();
@@ -40,6 +75,19 @@ export default {
     const declaredLength = Number(r.headers.get('Content-Length') || '0');
     if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BYTES) {
       return json(r, { ok: false, status: 'payload_too_large', error: 'Request body is too large.' }, 413);
+    }
+    if (r.body) {
+      let bounded: Request | null;
+      try {
+        bounded = await readBoundedRequestBody(r);
+      } catch {
+        return json(r, { ok: false, status: 'invalid_request_body', error: 'Request body could not be read.' }, 400);
+      }
+      if (!bounded) {
+        return json(r, { ok: false, status: 'payload_too_large', error: 'Request body is too large.' }, 413);
+      }
+      r = bounded;
+      requestEnv.set(r, env);
     }
     const token = String(env.GATEWAY_TOKEN || '').trim();
     const path = new URL(r.url).pathname;
