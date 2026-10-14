@@ -22,3 +22,38 @@ test('normal-size unauthorized bridge request is still 401', async () => {
   const r = new Request('https://arena.test/v2/scene-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   assert.equal((await entry.fetch(r, { GATEWAY_TOKEN: 't0k' }, {} as any)).status, 401);
 });
+
+
+test('body-size cap rejects chunked streams without Content-Length and cancels upstream', async () => {
+  let canceled = false;
+  let pulls = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      pulls++;
+      // No declared size. First chunk is accepted; next byte must reject.
+      controller.enqueue(new Uint8Array(pulls === 1 ? MAX_REQUEST_BYTES : 1));
+    },
+    cancel() { canceled = true; },
+  });
+  const r = new Request('https://arena.test/v2/scene-image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer t0k' },
+    body,
+    duplex: 'half',
+  } as RequestInit & { duplex: 'half' });
+  const res = await entry.fetch(r, { GATEWAY_TOKEN: 't0k' }, {} as any);
+  assert.equal(res.status, 413);
+  assert.equal((await res.json()).status, 'payload_too_large');
+  assert.equal(canceled, true, 'reader cancels upstream at the first excess byte');
+});
+
+test('body-size cap ignores a falsified small Content-Length', async () => {
+  const r = new Request('https://arena.test/v1/image/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': '2', Authorization: 'Bearer t0k' },
+    body: new Uint8Array(MAX_REQUEST_BYTES + 1),
+  });
+  const res = await entry.fetch(r, { GATEWAY_TOKEN: 't0k' }, {} as any);
+  assert.equal(res.status, 413);
+  assert.equal((await res.json()).status, 'payload_too_large');
+});
