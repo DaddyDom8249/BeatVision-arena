@@ -36,3 +36,14 @@
 ## 2026-10-13 — Complete Wan ZeroGPU status route + new-head CI
 
 A final route audit found that the validated-entry forwarded GET status, but the inner provider gateway lacked its explicit `/v1/video/wan-zero/jobs/` dispatch. Fixed both routing layers and added dedicated source regression coverage. Enabled safe, no-provider-request GitHub Arena Audit on the feature branch to obtain evidence for the exact amended commit; previously passing CI was from the old synchronous adapter. No production deployment, provider job, approval writes, paid APIs, or automatic retry.
+
+
+## 2026-10-13 — Cloudflare workerd signed-image redirect runtime fix
+
+**Observed:** Owner's Android Ghast Production Workspace displayed `Invalid redirect value, must be one of "follow" or "manual" ("error" won't be implemented since it does not make sense at the edge; use "manual" and check the response status code)` after tapping strictly-free AI movement preview. This is an actual Worker runtime exception, not a Hugging Face quota or media permission error.
+
+**Root cause:** `worker/src/hf-zerogpu-video.ts` used `fetch(sceneImageUrl,{redirect:"error"})`, which is valid in browsers but explicitly unsupported in Cloudflare workerd. The adapter catches it as `free_provider_unavailable` and the frontend correctly displays the exact error. The next external provider request never happened.
+
+**Repair:** Switch to `redirect:"manual"` and fail closed on any 3xx or `opaqueredirect` response before any image bytes are read or uploaded. Keep signed-source host, approved image provenance, size/type limits, JWT/API checks and no paid fallback unchanged. Add regression coverage asserting the Worker-safe redirect mode and rejecting both ordinary and opaque redirects without any Gradio submission.
+
+**Verification:** Awaiting exact-commit CI and Worker production deployment. Real generative MP4 still unverified; this only fixes the confirmed runtime blocker. No paid provider calls or creator asset mutations.
