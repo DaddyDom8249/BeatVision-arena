@@ -25,6 +25,14 @@ export default {
     const token = String(env.GATEWAY_TOKEN || '').trim();
     const path = new URL(r.url).pathname;
 
+    // IP rate limits are not authentication. Gate all legacy client provider
+    // endpoints before checking provider configuration or reading the body.
+    if (path.startsWith('/v1/client/')) {
+      if (!token) return json(r, { ok: false, error: 'Gateway authentication is not configured.' }, 503);
+      if (r.headers.get('Authorization') !== `Bearer ${token}`)
+        return json(r, { ok: false, error: 'Unauthorized' }, 401);
+    }
+
     if (path === '/health') {
       return json(r, {
         ok: true,
@@ -45,7 +53,7 @@ export default {
       });
     }
 
-    // Narrow client image endpoint: allows single scene generation without exposing master GATEWAY_TOKEN
+    // Legacy client endpoint requires server-held gateway authorization.
     if (path.startsWith('/v2/')) {
       const bridgeResponse = await handleBeatVisionBridge(r, env, (request, bridgeEnv) => arena.fetch(request, bridgeEnv, ctx));
       if (bridgeResponse) return bridgeResponse;

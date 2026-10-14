@@ -34,7 +34,7 @@ test('BeatVision scene-image route executes Flux Schnell only', async () => {
     const response = await worker.fetch(
       new Request('https://arena.example/v1/client/image/scene', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-gateway-token' },
         body: JSON.stringify({
           contract_version: '1.1',
           operation: 'sceneImages',
@@ -53,7 +53,7 @@ test('BeatVision scene-image route executes Flux Schnell only', async () => {
           }
         })
       }),
-      { PIXAZO_API_KEY: 'test-key' }
+      { PIXAZO_API_KEY: 'test-key', GATEWAY_TOKEN: 'test-gateway-token' }
     );
 
     assert.equal(response.status, 200);
@@ -91,7 +91,7 @@ test('BeatVision scene-image route falls back to Cloudflare Workers AI on Pixazo
     const response = await worker.fetch(
       new Request('https://arena.example/v1/client/image/scene', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-gateway-token' },
         body: JSON.stringify({
           contract_version: '1.1',
           operation: 'sceneImages',
@@ -106,6 +106,7 @@ test('BeatVision scene-image route falls back to Cloudflare Workers AI on Pixazo
       }),
       {
         PIXAZO_API_KEY: 'test-key',
+        GATEWAY_TOKEN: 'test-gateway-token',
         AI: {
           run: async (model: string, input: any) => {
             assert.equal(model, '@cf/black-forest-labs/flux-1-schnell');
