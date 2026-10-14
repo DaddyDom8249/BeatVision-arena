@@ -10,6 +10,9 @@ import { beatVisionBridgeCapabilities, handleBeatVisionBridge } from './beatvisi
 
 const clientRateLimit = new Map<string, number>();
 const RATE_LIMIT_WINDOW_MS = 10000; // 10 seconds per client IP
+// Hardening 2026-10-14: refuse oversized bodies before auth/provider work or
+// JSON parsing. Generous enough for base64 reference images.
+export const MAX_REQUEST_BYTES = 8 * 1024 * 1024;
 
 // Per-request env so json() can apply the ALLOWED_ORIGIN allowlist instead of
 // reflecting whatever Origin the caller sent.
@@ -34,6 +37,10 @@ export default {
   async fetch(r: Request, env: any, ctx: ExecutionContext) {
     requestEnv.set(r, env);
     if (r.method === 'OPTIONS') return arena.fetch(r, env, ctx);
+    const declaredLength = Number(r.headers.get('Content-Length') || '0');
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BYTES) {
+      return json(r, { ok: false, status: 'payload_too_large', error: 'Request body is too large.' }, 413);
+    }
     const token = String(env.GATEWAY_TOKEN || '').trim();
     const path = new URL(r.url).pathname;
 
