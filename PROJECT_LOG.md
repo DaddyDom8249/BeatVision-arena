@@ -70,3 +70,8 @@ Mobile production evidence: Gradio accepted a job and subsequently reported an S
 **Source fix:** On 'done', allow only the observed Shotstack sandbox S3 host, probe the output using Shotstack's existing /v1/probe service, require MP4 container, actual video plus audio streams, and probed duration within 0.35 seconds of the authoritative caller's target. Fail closed with stable error codes otherwise. Return media_validation only for verified media. No raw provider errors or stack traces returned. Mock tests assert valid media, missing audio, HTML container, wrong probe duration, probe unavailable, malicious output URL.
 
 **Gates:** No provider API requests made during tests, no production deploy. New probe call's billing allowance is NOT VERIFIED and must be approved as $0 before deployment. Supabase final_videos write-hardening PR is required to complete the workflow. Signed S3 URL may expire; finished downloadable video retention is a separate outstanding problem.
+
+
+## 2026-10-13 — Probe endpoint correction
+
+Current official Shotstack API documentation specifies GET /edit/stage/probe/:encodedAssetUrl. Draft Worker still used legacy /v1/probe; corrected to the documented staging route, and mocks assert the new request path. No live API request was made. A historical Shotstack answer states the inspector uses no credits; current account entitlements remain unverified.

@@ -20,7 +20,7 @@ async function run(statusResponse:Response,probeResponse:Response|null){
     const url=String(input);
     calls.push(url);
     if(url.includes('/edit/stage/render/'))return statusResponse.clone();
-    if(url.includes('/v1/probe/')&&probeResponse)return probeResponse.clone();
+    if(url.includes('/edit/stage/probe/')&&probeResponse)return probeResponse.clone();
     throw Error('Unexpected provider call '+url);
   };
   try {
@@ -35,6 +35,7 @@ test('probe proves MP4 video plus song audio and measured duration before PASS',
   assert.equal(result.data.result.media_validation.probed,true);
   assert.equal(result.data.result.media_validation.duration_seconds,10);
   assert.equal(result.calls.length,2);
+  assert.match(result.calls[1], /\/edit\/stage\/probe\//);
 });
 test('provider done with missing audio is failed, never complete',async()=>{
   const result=await run(status(),probe([video]));
