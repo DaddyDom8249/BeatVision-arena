@@ -1,3 +1,4 @@
+import { isGatewayAuthorized } from './gateway-auth.ts';
 // BeatVision ZeroGPU image-to-video adapter: short preview, free accounts only.
 // Two-phase Gradio upload -> submit, then bounded status polling.
 // No provider wallet, paid failover, automatic retry, or approved asset mutation.
@@ -180,7 +181,7 @@ async function poll(eventId:string,token:string) {
 }
 export default {
   async fetch(r:Request,e:any) {
-    if(!e.GATEWAY_TOKEN||r.headers.get("Authorization")!=="Bearer "+e.GATEWAY_TOKEN)
+    if(!isGatewayAuthorized(r,e))
       return reply({ok:false,status:"unauthorized"},401);
     const token=String(e.HF_VIDEO_TOKEN||"").trim();
     if(!token)return reply({ok:false,status:"provider_unavailable",error:"HF_VIDEO_TOKEN not configured"},503);

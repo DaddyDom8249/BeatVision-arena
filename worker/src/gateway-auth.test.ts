@@ -33,3 +33,12 @@ test('sub-gateways reject requests when no GATEWAY_TOKEN is configured (no provi
     assert.equal(calls, 0);
   } finally { globalThis.fetch = original; }
 });
+
+test('no gateway module compares the Authorization header with ===/!==', async () => {
+  const { readdir, readFile } = await import('node:fs/promises');
+  const dir = new URL('./', import.meta.url);
+  for (const name of (await readdir(dir)).filter(n => n.endsWith('.ts') && !n.endsWith('.test.ts'))) {
+    const src = await readFile(new URL(name, dir), 'utf8');
+    assert.doesNotMatch(src, /get\(['"]Authorization['"]\)\s*[!=]==/, name);
+  }
+});

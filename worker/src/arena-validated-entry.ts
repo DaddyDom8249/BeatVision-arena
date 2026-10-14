@@ -1,3 +1,4 @@
+import { isGatewayAuthorized } from './gateway-auth.ts';
 import arena from './arena-entry.ts';
 import providerGateway from './video-fallback-gateway.ts';
 import { BeatVisionAnimationJob } from './animation-jobs.ts';
@@ -29,7 +30,7 @@ export default {
     // endpoints before checking provider configuration or reading the body.
     if (path.startsWith('/v1/client/')) {
       if (!token) return json(r, { ok: false, error: 'Gateway authentication is not configured.' }, 503);
-      if (r.headers.get('Authorization') !== `Bearer ${token}`)
+      if (!isGatewayAuthorized(r, env))
         return json(r, { ok: false, error: 'Unauthorized' }, 401);
     }
 
@@ -221,7 +222,7 @@ export default {
     if (path !== '/' && !token) {
       return json(r, { ok: false, error: 'Gateway authentication is not configured; refusing provider operation.' }, 503);
     }
-    if (path !== '/' && path !== '/health' && r.headers.get('Authorization') !== `Bearer ${token}`) {
+    if (path !== '/' && path !== '/health' && !isGatewayAuthorized(r, env)) {
       return json(r, { ok: false, error: 'Unauthorized' }, 401);
     }
 

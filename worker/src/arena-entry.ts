@@ -1,3 +1,4 @@
+import { isGatewayAuthorized } from './gateway-auth.ts';
 import pixazo from './video-fallback-gateway.ts';
 import { compileMusicalContext } from './musical-structure.ts';
 import { splitLongBeats as splitLongBeatsWithMusic } from './scene-splitting.ts';
@@ -423,7 +424,7 @@ export default { async fetch(r: Request, e: any) {
   if (path.startsWith('/v1/client/')) {
     const token = String(e.GATEWAY_TOKEN || '').trim();
     if (!token) return json(r, e, { ok: false, error: 'Gateway authentication is not configured.', request_id: requestId }, 503);
-    if (r.headers.get('Authorization') !== `Bearer ${token}`)
+    if (!isGatewayAuthorized(r, e))
       return json(r, e, { ok: false, error: 'Unauthorized', request_id: requestId }, 401);
   }
   if (path === '/v1/client/image/reference-continuation') {
@@ -460,7 +461,7 @@ export default { async fetch(r: Request, e: any) {
     return resilientSceneImages(r, e, clientBody, requestId);
   }
   if (!e.GATEWAY_TOKEN) return json(r, e, { ok: false, error: 'Gateway authentication is not configured.', request_id: requestId }, 503);
-  if (r.headers.get('Authorization') !== `Bearer ${e.GATEWAY_TOKEN}`) return json(r, e, { ok: false, error: 'Unauthorized', request_id: requestId }, 401);
+  if (!isGatewayAuthorized(r, e)) return json(r, e, { ok: false, error: 'Unauthorized', request_id: requestId }, 401);
   let body: any; try { body = await r.clone().json(); } catch { return json(r, e, { ok: false, error: 'Invalid JSON request body.', request_id: requestId }, 400); }
   const renderStatusMatch = path.match(/^\/v1\/video\/assemble\/status\/([A-Za-z0-9-]+)$/);
   if (renderStatusMatch) {
