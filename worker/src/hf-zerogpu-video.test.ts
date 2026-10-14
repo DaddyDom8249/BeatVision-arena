@@ -56,7 +56,7 @@ test("approved image is fetched, uploaded to Gradio, then submitted exactly once
   await withFetch(async(url,options={})=>{
     const address=String(url);seen.push(address);
     if(address.endsWith("/api/whoami-v2"))return Response.json({isPro:false});
-    if(address===signed){assert.equal(options.redirect,"error");return new Response(Uint8Array.from([255,216,255,217]),{headers:{"Content-Type":"image/jpeg"}})}
+    if(address===signed){assert.equal(options.redirect,"manual");return new Response(Uint8Array.from([255,216,255,217]),{headers:{"Content-Type":"image/jpeg"}})}
     if(address===providerBase+"/gradio_api/upload"){
       assert.equal(options.method,"POST");
       assert.ok(options.body instanceof FormData);
@@ -84,6 +84,44 @@ test("approved image is fetched, uploaded to Gradio, then submitted exactly once
   assert.equal(seen.length,4);
   assert.ok(seen.every(url=>!url.includes("pixazo.ai")));
 });
+test("Cloudflare manual redirect policy rejects a signed-image HTTP 302 without uploading or queueing",async()=>{
+  const seen=[];
+  await withFetch(async(url,options={})=>{
+    seen.push(String(url));
+    if(String(url).endsWith("/api/whoami-v2"))return Response.json({isPro:false});
+    if(String(url)===signed){
+      assert.equal(options.redirect,"manual");
+      return new Response(null,{status:302,headers:{Location:"https://evil.example/steal"}});
+    }
+    throw Error("Unexpected provider request after redirected image: "+url);
+  },async()=>{
+    const response=await video.fetch(makeRequest(),env);
+    const data=await response.json();
+    assert.equal(response.status,503);
+    assert.equal(data.error,"APPROVED_IMAGE_REDIRECT_REFUSED");
+  });
+  assert.equal(seen.length,2);
+});
+
+test("Cloudflare opaque redirect is refused instead of triggering upload",async()=>{
+  let calls=0;
+  await withFetch(async(url,options={})=>{
+    calls++;
+    if(String(url).endsWith("/api/whoami-v2"))return Response.json({isPro:false});
+    if(String(url)===signed){
+      assert.equal(options.redirect,"manual");
+      return {type:"opaqueredirect",status:0,ok:false};
+    }
+    throw Error("Unexpected provider request");
+  },async()=>{
+    const response=await video.fetch(makeRequest(),env);
+    const data=await response.json();
+    assert.equal(response.status,503);
+    assert.equal(data.error,"APPROVED_IMAGE_REDIRECT_REFUSED");
+  });
+  assert.equal(calls,2);
+});
+
 test("poll returns actual video URL only on confirmed complete SSE event",async()=>{
   await withFetch(async(url,options)=>{
     assert.match(String(url),/gradio_api\/call\/generate_video\/proof_event_123456789/);

@@ -79,7 +79,12 @@ async function requireFreeAccount(token:string) {
   if(identity?.isPro!==false)throw Error("WAN_ZERO_GPU_FREE_ACCOUNT_NOT_VERIFIED");
 }
 async function uploadApprovedImage(sceneImageUrl:string,token:string) {
-  const src=await fetch(sceneImageUrl,{redirect:"error",signal:AbortSignal.timeout(15000)});
+  // Cloudflare Workers only supports "follow" and "manual"; the browser's
+  // "error" redirect mode is unsupported in workerd. Never follow source-image
+  // redirects: reject all 3xx/opaqueredirect responses before reading bytes.
+  const src=await fetch(sceneImageUrl,{redirect:"manual",signal:AbortSignal.timeout(15000)});
+  if(src.type==="opaqueredirect"||(src.status>=300&&src.status<400))
+    throw Error("APPROVED_IMAGE_REDIRECT_REFUSED");
   if(!src.ok)throw Error("APPROVED_IMAGE_FETCH_FAILED");
   const mime=String(src.headers.get("Content-Type")||"").split(";")[0].toLowerCase();
   if(!["image/jpeg","image/png","image/webp"].includes(mime))
