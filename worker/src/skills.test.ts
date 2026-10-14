@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { assertWorldLocked, cameraLanguageFor, compileGenerationPrompt, normalizeWorldReveal, providerResult, timelineGuardian, validateMediaRecord } from './skills';
+import { assertWorldLocked, cameraLanguageFor, compileGenerationPrompt, normalizeWorldReveal, providerResult, timelineGuardian, validateMediaRecord } from './skills.ts';
 
 test('world reveal normalizes the Grok domain shape without inventing data', () => {
   const report = normalizeWorldReveal({ emotionalMood: 'grief', visualMotifs: ['rain'] });
