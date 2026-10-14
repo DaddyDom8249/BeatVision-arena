@@ -1,3 +1,4 @@
+import { isGatewayAuthorized } from './gateway-auth.ts';
 import { compactAudio, normalizeVisualBeats, toStoryboard, visualBeatSystemPrompt } from './visual-beat-engine.ts';
 
 const CONTRACT_VERSION = '1.1';
@@ -24,7 +25,7 @@ function json(r: Request, e: any, data: unknown, status = 200) {
 }
 
 function auth(r: Request, e: any) {
-  return !e.GATEWAY_TOKEN || r.headers.get('Authorization') === `Bearer ${e.GATEWAY_TOKEN}`;
+  return isGatewayAuthorized(r, e);
 }
 
 function clip(value: any, max: number) {

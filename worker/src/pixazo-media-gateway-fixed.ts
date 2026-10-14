@@ -1,3 +1,4 @@
+import { isGatewayAuthorized } from './gateway-auth.ts';
 import { resolveShotstackSource } from './shotstack-gateway.ts';
 
 const BASE = 'https://gateway.pixazo.ai';
@@ -23,8 +24,7 @@ const json = (r: Request, e: any, data: unknown, status = 200) =>
     headers: { 'Content-Type': 'application/json', ...cors(r, e) }
   });
 
-const auth = (r: Request, e: any) =>
-  !e.GATEWAY_TOKEN || r.headers.get('Authorization') === `Bearer ${e.GATEWAY_TOKEN}`;
+const auth = (r: Request, e: any) => isGatewayAuthorized(r, e);
 
 const media = (d: any) =>
   d?.output?.media_url?.[0] || d?.output?.media_url || d?.output || d?.imageUrl || d?.image_url || d?.url || null;
