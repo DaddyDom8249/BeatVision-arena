@@ -50,6 +50,9 @@ jobs:
       - name: Persistent motion URL and full-duration regression tests
         run: node --experimental-strip-types --test worker/src/animation-jobs.test.ts
 
+      - name: Final MP4 media probe regression tests
+        run: node --experimental-strip-types --test worker/src/shotstack-final-media.test.ts
+
       - name: Legacy client image authorization regression tests
         run: |
           npx --yes esbuild worker/src/arena-client-auth.test.ts --bundle --format=esm --platform=node --outfile=/tmp/arena-client-auth.test.mjs

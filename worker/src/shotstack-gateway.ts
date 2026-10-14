@@ -13,27 +13,59 @@ async function shotstackFetch(path:string,key:string,init:RequestInit={}){const 
 async function uploadDataUrl(value:string,key:string,filename:string){const blob=dataUrlToBlob(value),ticket=await shotstackFetch('/ingest/stage/upload',key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename})}),id=ticket?.data?.id||ticket?.data?.attributes?.id,signed=ticket?.data?.attributes?.url;if(!id||!signed)throw new Error('Shotstack ingest did not return a signed upload URL.');const put=await fetch(signed,{method:'PUT',headers:{'Content-Type':blob.type||'application/octet-stream'},body:blob});if(!put.ok)throw new Error(`Shotstack source upload returned ${put.status}.`);const deadline=Date.now()+90000;while(Date.now()<deadline){const status=await shotstackFetch(`/ingest/stage/sources/${encodeURIComponent(id)}`,key),attrs=status?.data?.attributes||{};if(attrs.status==='ready'&&attrs.source)return attrs.source as string;if(['failed','error'].includes(String(attrs.status||'').toLowerCase()))throw new Error(`Shotstack source ingest failed: ${String(attrs.error||attrs.status)}`);await new Promise(resolve=>setTimeout(resolve,2000));}throw new Error('Shotstack source ingest timed out after 90 seconds.');}
 export async function resolveShotstackSource(value:unknown,key:string,filename:string){if(typeof value!=='string'||!value)throw new Error(`Missing ${filename} source.`);if(value.startsWith('data:'))return uploadDataUrl(value,key,filename);if(/^https?:\/\//i.test(value))return value;throw new Error(`Unsupported ${filename} source. Expected an https URL or data URL.`);}
 function probeDuration(data:any){const metadata=data?.response?.metadata||data?.metadata||{};const streams=Array.isArray(metadata.streams)?metadata.streams:[];const durations=streams.map((s:any)=>Number(s?.duration)).filter((n:number)=>Number.isFinite(n)&&n>0);const formatDuration=Number(metadata?.format?.duration);if(Number.isFinite(formatDuration)&&formatDuration>0)durations.push(formatDuration);return durations.length?Math.max(...durations):0;}
-async function probeVideo(url:string,key:string){const data=await shotstackFetch(`/v1/probe/${encodeURIComponent(url)}`,key);const duration=probeDuration(data);if(!(duration>0))throw new Error('MEDIA_INTEGRITY_PROBE_NO_DURATION');return{duration_seconds:duration,metadata:data?.response?.metadata||data?.metadata||null};}
+async function probeVideo(url:string,key:string){const data=await shotstackFetch(`/edit/stage/probe/${encodeURIComponent(url)}`,key);const duration=probeDuration(data);if(!(duration>0))throw new Error('MEDIA_INTEGRITY_PROBE_NO_DURATION');return{duration_seconds:duration,metadata:data?.response?.metadata||data?.metadata||null};}
 function extractMotionClips(payload:any){const candidates=payload?.motion?.clips||payload?.motion?.result?.clips;if(Array.isArray(candidates))return candidates.filter((x:any)=>x?.video_url||x?.url);const single=payload?.motion?.video_url||payload?.motion?.result?.video_url||payload?.motion?.url||payload?.motion?.result?.url;return typeof single==='string'&&single?[{scene:1,status:'animated',video_url:single,provider:payload?.motion?.provider,model:payload?.motion?.model,source:payload?.motion?.source,generation_type:payload?.motion?.generation_type}]:[];}
 export async function getShotstackRenderStatus(r:Request,e:any,renderId:string,targetDuration:number){
  const id=r.headers.get('X-BeatVision-Request')||crypto.randomUUID();
  if(!auth(r,e))return json(r,e,{ok:false,error:'Unauthorized',request_id:id},401);
  const key=e.SHOTSTACK_API_KEY;
- if(!key)return json(r,e,{ok:false,contract_version:'1.1',capability:'video',status:'provider_unavailable',request_id:id,error:'Shotstack Sandbox is not configured. Configure SHOTSTACK_API_KEY as a Worker secret.'},503);
+ if(!key)return json(r,e,{ok:false,status:'provider_unavailable',error:'Shotstack Sandbox is not configured.'},503);
  if(!/^[A-Za-z0-9-]+$/.test(renderId))return json(r,e,{ok:false,error:'Invalid render ID.',request_id:id},400);
+ const failed=(code:string)=>json(r,e,{ok:true,contract_version:'1.1',capability:'video',
+   provider:'shotstack',status:'failed',request_id:id,
+   result:{status:'failed',render_id:renderId,error:code,render_integrity:'FAILED'}});
  try{
-  const data=await shotstackFetch(`/edit/stage/render/${encodeURIComponent(renderId)}`,key);
+  const data=await shotstackFetch('/edit/stage/render/'+encodeURIComponent(renderId),key);
   const response=data?.response||data?.data||{};
   const status=String(response.status||'').toLowerCase();
-  if(status==='done'){
-   const duration=Number(response.duration);
-   if(!(duration>0)||!(targetDuration>0)||Math.abs(duration-targetDuration)>0.35)return json(r,e,{ok:true,contract_version:'1.1',capability:'video',provider:'shotstack',status:'failed',request_id:id,result:{status:'failed',render_id:renderId,error:`FINAL_MEDIA_DURATION_MISMATCH: expected=${targetDuration.toFixed(3)}s actual=${Number.isFinite(duration)?duration.toFixed(3):'unknown'}s`}});
-  }
-  if(['failed','error'].includes(status))return json(r,e,{ok:true,contract_version:'1.1',capability:'video',provider:'shotstack',status:'failed',request_id:id,result:{status:'failed',render_id:renderId,error:String(response.error||status).slice(0,1800)}});
-  return json(r,e,{ok:true,contract_version:'1.1',capability:'video',provider:'shotstack',environment:'sandbox',delivery:status==='done'?'temporary_url':'render_id',watermark:true,request_id:id,result:{status:status||'unknown',render_id:renderId,video_url:status==='done'?response.url:null,preview_url:status==='done'?response.url:null,duration_seconds:Number(response.duration)||null,target_duration_seconds:targetDuration,render_integrity:status==='done'?'PASS':'PENDING'}});
- }catch(error){return json(r,e,{ok:false,contract_version:'1.1',capability:'video',provider:'shotstack',status:'provider_error',request_id:id,render_id:renderId,error:String(error instanceof Error?error.message:error).slice(0,2000)},502);}
+  if(['failed','error'].includes(status))return failed('FINAL_RENDER_FAILED');
+  if(status!=='done')return json(r,e,{ok:true,contract_version:'1.1',
+    capability:'video',provider:'shotstack',environment:'sandbox',delivery:'render_id',
+    watermark:true,status:status||'unknown',request_id:id,
+    result:{status:status||'unknown',render_id:renderId,render_integrity:'PENDING'}});
+  // Untrusted response URL never reaches the provider's media-probe service
+  // unless it belongs to the known sandbox output host.
+  let output:URL;
+  try{output=new URL(String(response.url||''))}
+  catch{return failed('FINAL_MEDIA_OUTPUT_URL_INVALID')}
+  if(output.protocol!=='https:'||
+     output.hostname!=='shotstack-api-stage-output.s3-ap-southeast-2.amazonaws.com'||
+     Boolean(output.username)||Boolean(output.password))
+    return failed('FINAL_MEDIA_OUTPUT_HOST_UNTRUSTED');
+  if(!(targetDuration>0)||!Number.isFinite(targetDuration))
+    return failed('FINAL_MEDIA_TARGET_DURATION_INVALID');
+  let probed:Awaited<ReturnType<typeof probeVideo>>;
+  try{probed=await probeVideo(output.href,key)}
+  catch{return failed('FINAL_MEDIA_PROBE_FAILED')}
+  const metadata=probed.metadata||{};
+  const streams=Array.isArray(metadata.streams)?metadata.streams:[];
+  const hasVideo=streams.some((stream:any)=>stream.codec_type==='video'&&Boolean(stream.codec_name));
+  const hasAudio=streams.some((stream:any)=>stream.codec_type==='audio'&&Boolean(stream.codec_name));
+  const format=String(metadata?.format?.format_name||'').toLowerCase();
+  if(!hasVideo||!hasAudio||!format.includes('mp4'))
+    return failed('FINAL_MEDIA_STREAMS_INVALID');
+  const duration=Number(probed.duration_seconds);
+  if(!(duration>0)||Math.abs(duration-targetDuration)>0.35)
+    return failed('FINAL_MEDIA_DURATION_MISMATCH');
+  return json(r,e,{ok:true,contract_version:'1.1',capability:'video',
+    provider:'shotstack',environment:'sandbox',delivery:'temporary_url',watermark:true,
+    status:'done',request_id:id,
+    result:{status:'done',render_id:renderId,video_url:output.href,preview_url:output.href,
+      duration_seconds:duration,target_duration_seconds:targetDuration,render_integrity:'PASS',
+      media_validation:{probed:true,probe_provider:'shotstack',has_video_stream:true,
+        has_audio_stream:true,format:'mp4',duration_seconds:duration}}});
+ }catch{return failed('FINAL_RENDER_STATUS_UNAVAILABLE')}
 }
-
 export default {async fetch(r:Request,e:any){if(r.method==='OPTIONS')return new Response(null,{status:204,headers:cors(r,e)});const url=new URL(r.url);if(url.pathname!=='/v1/video/assemble')return json(r,e,{ok:false,error:'Not found'},404);const id=r.headers.get('X-BeatVision-Request')||crypto.randomUUID();if(!auth(r,e))return json(r,e,{ok:false,error:'Unauthorized',request_id:id},401);if(r.method!=='POST')return json(r,e,{ok:false,error:'POST required',request_id:id},405);const key=e.SHOTSTACK_API_KEY;if(!key)return json(r,e,{ok:false,contract_version:'1.1',capability:'video',provider:'shotstack',status:'provider_unavailable',request_id:id,error:'Shotstack Sandbox is not configured. Configure SHOTSTACK_API_KEY as a Worker secret.'},503);let body:any;try{body=await r.json()}catch{return json(r,e,{ok:false,error:'Invalid JSON body',request_id:id},400);}if(body?.contract_version!=='1.1'||body?.operation!=='assemble')return json(r,e,{ok:false,error:'Expected BeatVision contract 1.1 assemble operation.',request_id:id},400);const payload=body.payload||{},motionClips=extractMotionClips(payload),storyboardScenes=Array.isArray(payload.storyboard?.scenes)?payload.storyboard.scenes:Array.isArray(payload.storyboard?.visual_beats)?payload.storyboard.visual_beats:[];if(!storyboardScenes.length)return json(r,e,{ok:false,contract_version:'1.1',capability:'video',status:'invalid_input',request_id:id,error:'Assembly requires the approved storyboard master timeline.'},400);if(!motionClips.length)return json(r,e,{ok:false,contract_version:'1.1',capability:'video',status:'invalid_input',request_id:id,error:'Assembly requires generated motion clips.'},400);const started=Date.now();try{
  const targetDuration=targetDurationFromPayload(payload,Number(payload.storyboard?.songDuration||payload.storyboard?.song_duration||0));if(!(targetDuration>0))throw new Error('MEDIA_INTEGRITY_MISSING_TARGET_DURATION');
  
