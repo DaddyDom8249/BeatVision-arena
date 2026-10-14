@@ -52,3 +52,12 @@ A final route audit found that the validated-entry forwarded GET status, but the
 ## 2026-10-13 — Fix terminal WAN_ZERO_GPU_PROVIDER_ERROR
 
 Mobile production evidence: Gradio accepted a job and subsequently reported an SSE event:error. The Arena returned a generic 503, while the Studio retained a stuck queued ticket. New parser returns terminal status failed with an allowlisted failure category and safe message; no raw traceback disclosure, no automatic requeue, no paid fallback and no approved asset mutation. Live underlying model error still unverified.
+
+
+## 2026-10-13 — C1 audit repair: fail-closed legacy image access
+
+**Finding confirmed on GitHub main:** Both legacy /v1/client/image endpoints entered provider-capable code before the GATEWAY_TOKEN authorization gate. In-memory rate limiting is not authorization; actual incurred charges remain unverified. 
+
+**Code fix, not deployed:** The outer validated Worker and inner Arena handler now require a configured server-side GATEWAY_TOKEN with matching Bearer header for all /v1/client paths, before any provider call or body validation. Legacy anonymous browser consumers will be denied; authenticated trusted-backend calls can continue. No approved assets, provider secrets, model entitlements or production settings are modified.
+
+**Regressions:** Denial for absent/wrong token and missing configuration on scene and reference routes, both handler layers, spoofed-IP denial and retention of authenticated Flux Schnell mocking. Tests do not execute real provider calls. Await exact PR CI. Owner must explicitly authorize merge/deployment.

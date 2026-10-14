@@ -50,6 +50,11 @@ jobs:
       - name: Persistent motion URL and full-duration regression tests
         run: node --experimental-strip-types --test worker/src/animation-jobs.test.ts
 
+      - name: Legacy client image authorization regression tests
+        run: |
+          npx --yes esbuild worker/src/arena-client-auth.test.ts --bundle --format=esm --platform=node --outfile=/tmp/arena-client-auth.test.mjs
+          node --test /tmp/arena-client-auth.test.mjs
+
       - name: Flux Schnell scene-image routing regression test
         run: |
           npx --yes esbuild worker/src/arena-entry-flux-schnell.test.ts --bundle --format=esm --platform=node --outfile=/tmp/arena-entry-flux-schnell.test.mjs

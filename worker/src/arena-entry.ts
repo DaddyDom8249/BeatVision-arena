@@ -419,6 +419,13 @@ export default { async fetch(r: Request, e: any) {
   if (r.method === 'OPTIONS') { const origin = r.headers.get('Origin') || ''; const allowed = String(e.ALLOWED_ORIGIN || '').split(',').map((x: string) => x.trim()).filter(Boolean); if (!origin || !allowed.includes(origin)) return new Response(null, { status: 403, headers: cors(r, e) }); return new Response(null, { status: 204, headers: cors(r, e) }); }
   const url = new URL(r.url), path = url.pathname, requestId = r.headers.get('X-BeatVision-Request') || crypto.randomUUID();
   if (path === '/' || path === '/health') return pixazo.fetch(r, e);
+  // Defense in depth: direct callers of this inner handler must fail closed.
+  if (path.startsWith('/v1/client/')) {
+    const token = String(e.GATEWAY_TOKEN || '').trim();
+    if (!token) return json(r, e, { ok: false, error: 'Gateway authentication is not configured.', request_id: requestId }, 503);
+    if (r.headers.get('Authorization') !== `Bearer ${token}`)
+      return json(r, e, { ok: false, error: 'Unauthorized', request_id: requestId }, 401);
+  }
   if (path === '/v1/client/image/reference-continuation') {
     if (r.method !== 'POST') return json(r, e, { ok: false, error: 'Method Not Allowed', request_id: requestId }, 405);
     let body: any; try { body = await r.json(); } catch { return json(r, e, { ok: false, error: 'Invalid JSON request body.', request_id: requestId }, 400); }
