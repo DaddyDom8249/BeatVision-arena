@@ -58,6 +58,14 @@ jobs:
           npx --yes esbuild worker/src/arena-client-auth.test.ts --bundle --format=esm --platform=node --outfile=/tmp/arena-client-auth.test.mjs
           node --test /tmp/arena-client-auth.test.mjs
 
+      - name: Gateway auth fail-closed and constant-time regression tests
+        run: node --experimental-strip-types --test worker/src/gateway-auth.test.ts
+
+      - name: Validated entry CORS allowlist regression tests
+        run: |
+          npx --yes esbuild worker/src/cors-validated-entry.test.ts --bundle --format=esm --platform=node --outfile=/tmp/cors-validated-entry.test.mjs
+          node --test /tmp/cors-validated-entry.test.mjs
+
       - name: Flux Schnell scene-image routing regression test
         run: |
           npx --yes esbuild worker/src/arena-entry-flux-schnell.test.ts --bundle --format=esm --platform=node --outfile=/tmp/arena-entry-flux-schnell.test.mjs

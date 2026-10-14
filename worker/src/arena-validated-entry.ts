@@ -11,17 +11,28 @@ import { beatVisionBridgeCapabilities, handleBeatVisionBridge } from './beatvisi
 const clientRateLimit = new Map<string, number>();
 const RATE_LIMIT_WINDOW_MS = 10000; // 10 seconds per client IP
 
+// Per-request env so json() can apply the ALLOWED_ORIGIN allowlist instead of
+// reflecting whatever Origin the caller sent.
+const requestEnv = new WeakMap<Request, any>();
+export function corsHeadersFor(r: Request, env: any): Record<string, string> {
+  const origin = r.headers.get('Origin') || '';
+  const allowed = String(env?.ALLOWED_ORIGIN || '').split(',').map((x: string) => x.trim()).filter(Boolean);
+  const headers: Record<string, string> = {
+    'Vary': 'Origin',
+    'Access-Control-Allow-Headers': 'Content-Type,X-BeatVision-Contract,Authorization,X-BeatVision-Request'
+  };
+  if (origin && allowed.includes(origin)) headers['Access-Control-Allow-Origin'] = origin;
+  return headers;
+}
+
 const json = (r: Request, data: unknown, status = 200) => new Response(JSON.stringify(data, null, 2), {
   status,
-  headers: {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': r.headers.get('Origin') || 'https://daddydom8249.github.io',
-    'Access-Control-Allow-Headers': 'Content-Type,X-BeatVision-Contract,Authorization,X-BeatVision-Request'
-  }
+  headers: { 'Content-Type': 'application/json', ...corsHeadersFor(r, requestEnv.get(r)) }
 });
 
 export default {
   async fetch(r: Request, env: any, ctx: ExecutionContext) {
+    requestEnv.set(r, env);
     if (r.method === 'OPTIONS') return arena.fetch(r, env, ctx);
     const token = String(env.GATEWAY_TOKEN || '').trim();
     const path = new URL(r.url).pathname;
