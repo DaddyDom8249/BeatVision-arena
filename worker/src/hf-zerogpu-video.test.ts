@@ -172,3 +172,32 @@ test("both validated entry and provider gateway route status GET to ZeroGPU",()=
   assert.match(entry,/path\.startsWith\('\/v1\/video\/wan-zero\/jobs\/'\)/);
   assert.match(router,/path\.startsWith\('\/v1\/video\/wan-zero\/jobs\/'\)/);
 });
+
+test("Gradio SSE error ends job, gives safe classification, never submits another",async()=>{
+  let calls=0;
+  await withFetch(async(url)=>{
+    calls++;
+    assert.match(String(url),/\/gradio_api\/call\/generate_video\/proof_event_123456789/);
+    return new Response('event: error\ndata: {"error":"CUDA out of memory at /srv/app.py credential=secret"}\n\n');
+  },async()=>{
+    const response=await video.fetch(pollRequest(),env);
+    const data=await response.json();
+    assert.equal(response.status,200);
+    assert.equal(data.ok,true);
+    assert.equal(data.status,"failed");
+    assert.equal(data.terminal,true);
+    assert.equal(data.retry_automatically,false);
+    assert.equal(data.failure_category,"gpu_runtime");
+    assert.doesNotMatch(JSON.stringify(data),/credential=secret|srv\/app.py/);
+  });
+  assert.equal(calls,1);
+});
+test("Unknown Gradio error remains terminal, no raw path disclosure",async()=>{
+  await withFetch(async()=>new Response('event: error\ndata: {"error":"Exception /tmp/secrets/private.txt"}\n\n'),async()=>{
+    const response=await video.fetch(pollRequest(),env);
+    const data=await response.json();
+    assert.equal(data.status,"failed");
+    assert.equal(data.failure_category,"provider_runtime");
+    assert.doesNotMatch(JSON.stringify(data),/\/tmp\/secrets/);
+  });
+});
