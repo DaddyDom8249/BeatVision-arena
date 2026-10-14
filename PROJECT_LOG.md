@@ -75,3 +75,14 @@ Mobile production evidence: Gradio accepted a job and subsequently reported an S
 ## 2026-10-13 — Probe endpoint correction
 
 Current official Shotstack API documentation specifies GET /edit/stage/probe/:encodedAssetUrl. Draft Worker still used legacy /v1/probe; corrected to the documented staging route, and mocks assert the new request path. No live API request was made. A historical Shotstack answer states the inspector uses no credits; current account entitlements remain unverified.
+
+
+## 2026-10-14 — Arena request-size streaming guard (PR #45, source only)
+
+**Confirmed defect:** The prior size limit checked only `Content-Length`. Chunked bodies without the header (or bodies with dishonest smaller headers) reached JSON parsing and downstream handlers with no true byte cap.
+
+**Root cause and safe fix:** `worker/src/arena-validated-entry.ts` now consumes the original ReadableStream with a running 8 MiB cap, cancels on the first excess byte and forwards a reconstructed Request with the bounded data. It intentionally does **not** use `request.clone()` to inspect the body because teeing can buffer the unread branch. The existing fast `Content-Length` rejection remains. Over-limit requests return 413 before any gateway/provider call. A body stream read error returns 400. No approved media, secrets, model fallback or provider contract changed.
+
+**Regression tests:** `worker/src/request-size.test.ts` now covers streaming without Content-Length and cancellation, falsified small declared length, prior declared oversize denial and normal unauthorized bridge behavior. GitHub Arena Audit run 38574724891 for commit `159fd7d6a127c53b9519b7d86df546f1078c6899` SUCCESS. Worker deployment and live production protection remain UNVERIFIED.
+
+**Release:** PR #45 remains draft; no production Arena deployment or provider calls were made. Local Worker/device verification not performed in this session.
