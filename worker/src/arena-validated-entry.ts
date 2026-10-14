@@ -46,6 +46,11 @@ export default {
     }
 
     if (path === '/health') {
+      // Unauthenticated liveness only; configuration/secret presence and model
+      // details are disclosed to gateway-authorized callers exclusively.
+      if (!isGatewayAuthorized(r, env)) {
+        return json(r, { ok: true, service: 'beatvision-provider-arena', contract_version: '1.1', bridge_contract_version: '2.0' });
+      }
       return json(r, {
         ok: true,
         service: 'beatvision-provider-arena',
