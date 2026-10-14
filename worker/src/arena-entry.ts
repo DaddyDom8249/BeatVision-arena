@@ -1,3 +1,4 @@
+import { isGatewayAuthorized } from './gateway-auth.ts';
 import pixazo from './video-fallback-gateway.ts';
 import { compileMusicalContext } from './musical-structure.ts';
 import { splitLongBeats as splitLongBeatsWithMusic } from './scene-splitting.ts';
@@ -61,7 +62,7 @@ const scenePrompt = (payload: any, scene: any, index: number, total: number) => 
 };
 
 async function pixazoPost(path: string, key: string, body: any) {
-  const response = await fetch(`${BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', 'Ocp-Apim-Subscription-Key': key }, body: JSON.stringify(body) });
+  const response = await fetch(`${BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', 'Ocp-Apim-Subscription-Key': key }, body: JSON.stringify(body), signal: AbortSignal.timeout(30000) });
   const text = await response.text(); let data: any; try { data = JSON.parse(text); } catch { data = { raw: text }; }
   if (!response.ok) throw new Error(`Pixazo ${response.status} at ${path}: ${String(data?.message || data?.error || text).slice(0, 1600)}`);
   return data;
@@ -81,7 +82,8 @@ async function pixazoStatus(key: string, requestId: string, model: string) {
           'Ocp-Apim-Subscription-Key': key,
           'Cache-Control': 'no-cache'
         },
-        body: JSON.stringify({ requestId })
+        body: JSON.stringify({ requestId }),
+        signal: AbortSignal.timeout(20000)
       });
       const text = await response.text();
       let data: any;
@@ -99,7 +101,8 @@ async function pixazoStatus(key: string, requestId: string, model: string) {
       }
     } else {
       const response = await fetch(`${BASE}/v2/requests/status/${encodeURIComponent(requestId)}`, {
-        headers: { 'Ocp-Apim-Subscription-Key': key, 'Cache-Control': 'no-cache' }
+        headers: { 'Ocp-Apim-Subscription-Key': key, 'Cache-Control': 'no-cache' },
+        signal: AbortSignal.timeout(20000)
       });
       const text = await response.text();
       let data: any;
@@ -423,7 +426,7 @@ export default { async fetch(r: Request, e: any) {
   if (path.startsWith('/v1/client/')) {
     const token = String(e.GATEWAY_TOKEN || '').trim();
     if (!token) return json(r, e, { ok: false, error: 'Gateway authentication is not configured.', request_id: requestId }, 503);
-    if (r.headers.get('Authorization') !== `Bearer ${token}`)
+    if (!isGatewayAuthorized(r, e))
       return json(r, e, { ok: false, error: 'Unauthorized', request_id: requestId }, 401);
   }
   if (path === '/v1/client/image/reference-continuation') {
@@ -460,7 +463,7 @@ export default { async fetch(r: Request, e: any) {
     return resilientSceneImages(r, e, clientBody, requestId);
   }
   if (!e.GATEWAY_TOKEN) return json(r, e, { ok: false, error: 'Gateway authentication is not configured.', request_id: requestId }, 503);
-  if (r.headers.get('Authorization') !== `Bearer ${e.GATEWAY_TOKEN}`) return json(r, e, { ok: false, error: 'Unauthorized', request_id: requestId }, 401);
+  if (!isGatewayAuthorized(r, e)) return json(r, e, { ok: false, error: 'Unauthorized', request_id: requestId }, 401);
   let body: any; try { body = await r.clone().json(); } catch { return json(r, e, { ok: false, error: 'Invalid JSON request body.', request_id: requestId }, 400); }
   const renderStatusMatch = path.match(/^\/v1\/video\/assemble\/status\/([A-Za-z0-9-]+)$/);
   if (renderStatusMatch) {

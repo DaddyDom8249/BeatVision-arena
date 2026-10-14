@@ -1,3 +1,4 @@
+import { isGatewayAuthorized } from './gateway-auth.ts';
 import pixazo from './pixazo-media-gateway-fixed.ts';
 import zeroGpuWan from './hf-zerogpu-video.ts';
 import motionResilient from './pixazo-motion-resilience.ts';
@@ -6,7 +7,7 @@ import externalProvider from './external-provider-gateway.ts';
 
 function cors(r:Request,e:any){const o=r.headers.get('Origin')||'';const allowed=String(e.ALLOWED_ORIGIN||'').split(',').map((x:string)=>x.trim()).filter(Boolean);const h:Record<string,string>={'Vary':'Origin','Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Headers':'Content-Type,X-BeatVision-Contract,Authorization,X-BeatVision-Request','Access-Control-Max-Age':'86400'};if(o&&allowed.includes(o))h['Access-Control-Allow-Origin']=o;return h;}
 function json(r:Request,e:any,d:unknown,status=200){return new Response(JSON.stringify(d,null,2),{status,headers:{'Content-Type':'application/json',...cors(r,e)}});}
-function auth(r:Request,e:any){return !!e.GATEWAY_TOKEN&&r.headers.get('Authorization')===`Bearer ${e.GATEWAY_TOKEN}`;}
+function auth(r:Request,e:any){return isGatewayAuthorized(r,e);}
 function enrichMotionResponse(response:Response,body:any,requestId:string){
   if(response.status>=400)return response;
   return response.clone().json().then((data:any)=>{

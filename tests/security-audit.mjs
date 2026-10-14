@@ -2,12 +2,13 @@ import fs from 'node:fs';
 
 const arena = fs.readFileSync('worker/src/arena-entry.ts', 'utf8');
 const gateway = fs.readFileSync('worker/src/video-fallback-gateway.ts', 'utf8');
+const gatewayAuth = fs.readFileSync('worker/src/gateway-auth.ts', 'utf8');
 const wrangler = fs.readFileSync('worker/wrangler.toml', 'utf8');
 
 if (!arena.includes("if (!e.GATEWAY_TOKEN) return json(r, e, { ok: false, error: 'Gateway authentication is not configured.'")) {
   throw new Error('Direct Arena gateway must fail closed when GATEWAY_TOKEN is missing.');
 }
-if (!arena.includes("if (r.headers.get('Authorization') !== `Bearer ${e.GATEWAY_TOKEN}`)")) {
+if (!arena.includes("if (!isGatewayAuthorized(r, e)) return json(r, e, { ok: false, error: 'Unauthorized'")) {
   throw new Error('Direct Arena gateway bearer-token verification is missing.');
 }
 if (!arena.includes("if (origin && allowed.includes(origin)) headers['Access-Control-Allow-Origin'] = origin")) {
@@ -23,7 +24,7 @@ if (!arena.includes("return json(r, e, { ok: false, error: 'Invalid JSON request
   throw new Error('Direct Arena gateway must reject malformed JSON.');
 }
 
-if (!gateway.includes("return !!e.GATEWAY_TOKEN&&r.headers.get('Authorization')===`Bearer ${e.GATEWAY_TOKEN}`")) {
+if (!gateway.includes("function auth(r:Request,e:any){return isGatewayAuthorized(r,e);}") || !gatewayAuth.includes("if (!token) return false;") || !gatewayAuth.includes("timingSafeEqualString(")) {
   throw new Error('Provider gateway authentication must fail closed.');
 }
 if (!gateway.includes("if(!o||!allowed.includes(o))return new Response(null,{status:403")) {

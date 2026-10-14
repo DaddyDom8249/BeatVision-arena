@@ -1,3 +1,4 @@
+import { isGatewayAuthorized } from './gateway-auth.ts';
 export const BEATVISION_BRIDGE_CONTRACT = '2.0';
 
 const FREE_IMAGE_MODELS = new Set(['flux-schnell']);
@@ -176,7 +177,7 @@ export async function handleBeatVisionBridge(
     return json(r, { ok: false, contract_version: BEATVISION_BRIDGE_CONTRACT, status: 'invalid_method', request_id: requestId, error: 'POST required.' }, 405);
   }
 
-  if (!String(env.GATEWAY_TOKEN || '').trim() || r.headers.get('Authorization') !== `Bearer ${env.GATEWAY_TOKEN}`) {
+  if (!isGatewayAuthorized(r, env)) {
     return json(r, { ok: false, contract_version: BEATVISION_BRIDGE_CONTRACT, status: 'unauthorized', request_id: requestId, error: 'Unauthorized.' }, 401);
   }
 
