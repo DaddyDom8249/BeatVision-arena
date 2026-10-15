@@ -1,5 +1,7 @@
 # BeatVision Arena
 
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/DaddyDom8249/BeatVision-arena?utm_source=oss&utm_medium=github&utm_campaign=DaddyDom8249%2FBeatVision-arena&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+
 Safe integration workspace for BeatVision.
 
 This repository is the **provider execution arena**: a disposable place to assemble and test provider integrations before proven changes are promoted into `BeatVision` (the main application) or `BeatVision-Test` (the presentation/proving-ground repo).
