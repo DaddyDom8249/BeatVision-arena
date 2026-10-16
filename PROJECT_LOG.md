@@ -1,5 +1,18 @@
 # BeatVision Arena Project Log
 
+## 2026-10-16 — Remove pre-auth streaming double-allocation, add missing CI regression
+
+**Scope:** Existing unmerged Arena hardening PR #45. No main merge, Worker deployment, secret/provider change, production mutation or paid request.
+
+**Finding:** CodeRabbit identified a major memory risk: up to 8 MiB in streamed chunks remained resident while a second full-sized array was allocated before authentication. Existing Arena Audit was passing but did not run `worker/src/request-size.test.ts` at all.
+
+**Change:** `worker/src/arena-validated-entry.ts` now appends bytes into one incrementally-grown, bounded buffer instead of holding every chunk and allocating another full-size assembly buffer. The strict actual-byte 8 MiB ceiling and upstream cancellation on excess remain intact. Exported the bounded reader for direct regression testing. `worker/src/request-size.test.ts` now checks exact binary-byte preservation through chunk growth. `.github/workflows/audit.yml` explicitly bundles and runs the request-size suite for PRs.
+
+**Verification:** An isolated Node 22 test of the exact proposed bounded-reader algorithm passed binary multi-chunk retention, over-limit stream cancellation and empty-body cases (exit 0). The pre-CI-gate branch run 38872796124 passed its existing suite but **did not execute** the newly relevant request-size tests; this is NOT a passing exact-head gate. Source commits `c69704f6`, `7ad0e72`, `81da6eb` pushed to the existing PR branch. Exact-head CI, workload/memory concurrency behavior, live Cloudflare deployment and provider flow remain **NOT VERIFIED** at this checkpoint.
+
+**Next gate:** Require the new Arena Audit request-size step and full workflow to pass, reconcile outstanding CodeRabbit review, verify branch/base compatibility, then consider release only under existing deployment/production authorization and zero-cost constraints.
+
+
 ## 2026-10-09 17:41 UTC — Restore buildable Worker source and preserve live motion timing
 
 **Observed failure:** GitHub main 7454dace fails Worker deployment run 37729347507 at animation-jobs.ts:33 with Syntax error (backslash). The new real-module motion tests and local esbuild entry build reproduce the same invalid TypeScript before repair.
