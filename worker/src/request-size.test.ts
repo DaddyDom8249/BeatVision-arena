@@ -1,7 +1,7 @@
 // Hardening 2026-10-14: oversized requests are refused before auth or provider calls.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import entry, { MAX_REQUEST_BYTES } from './arena-validated-entry.ts';
+import entry, { MAX_REQUEST_BYTES, readBoundedRequestBody } from './arena-validated-entry.ts';
 
 test('oversized declared body returns 413 without any provider call', async () => {
   const original = globalThis.fetch; let calls = 0;
@@ -56,4 +56,25 @@ test('body-size cap ignores a falsified small Content-Length', async () => {
   const res = await entry.fetch(r, { GATEWAY_TOKEN: 't0k' }, {} as any);
   assert.equal(res.status, 413);
   assert.equal((await res.json()).status, 'payload_too_large');
+});
+
+test('bounded reader preserves binary bytes across streamed chunks and growth', async () => {
+  const parts = [Uint8Array.of(0, 1, 255), new Uint8Array(100_000).fill(73), Uint8Array.of(42)];
+  let index = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (index < parts.length) controller.enqueue(parts[index++]);
+      else controller.close();
+    },
+  });
+  const request = new Request('https://arena.test/v2/scene-image', {
+    method: 'POST', body, duplex: 'half',
+  } as RequestInit & { duplex: 'half' });
+  const bounded = await readBoundedRequestBody(request);
+  assert.ok(bounded instanceof Request);
+  const expected = new Uint8Array(100_004);
+  expected.set(parts[0], 0);
+  expected.set(parts[1], 3);
+  expected.set(parts[2], 100_003);
+  assert.deepEqual(new Uint8Array(await bounded.arrayBuffer()), expected);
 });
