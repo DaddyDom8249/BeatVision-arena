@@ -21,32 +21,35 @@ export const MAX_REQUEST_BYTES = 8 * 1024 * 1024;
  * without a Content-Length header. Downstream handlers receive a new Request
  * containing only the successfully bounded body.
  */
-async function readBoundedRequestBody(r: Request): Promise<Request | null> {
+export async function readBoundedRequestBody(r: Request): Promise<Request | null> {
   if (!r.body) return r;
   const reader = r.body.getReader();
-  const chunks: Uint8Array[] = [];
+  // Grow one bounded buffer instead of retaining all chunks while allocating
+  // a second full-size body. Small requests do not reserve 8 MiB upfront.
+  let body = new Uint8Array(0);
   let length = 0;
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      length += value.byteLength;
-      if (length > MAX_REQUEST_BYTES) {
+      if (value.byteLength > MAX_REQUEST_BYTES - length) {
         void reader.cancel().catch(() => undefined);
         return null;
       }
-      chunks.push(value);
+      const required = length + value.byteLength;
+      if (required > body.byteLength) {
+        const capacity = Math.min(MAX_REQUEST_BYTES, Math.max(required, body.byteLength ? body.byteLength * 2 : 64 * 1024));
+        const next = new Uint8Array(capacity);
+        next.set(body.subarray(0, length));
+        body = next;
+      }
+      body.set(value, length);
+      length = required;
     }
   } finally {
     reader.releaseLock();
   }
-  const body = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new Request(r, { body });
+  return new Request(r, { body: body.subarray(0, length) });
 }
 
 // Per-request env so json() can apply the ALLOWED_ORIGIN allowlist instead of
