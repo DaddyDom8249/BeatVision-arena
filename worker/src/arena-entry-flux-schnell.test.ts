@@ -127,3 +127,63 @@ test('BeatVision scene-image route falls back to Cloudflare Workers AI on Pixazo
     globalThis.fetch = originalFetch;
   }
 });
+
+test('BeatVision images use only the confirmed free Cloudflare binding, never Pixazo', async () => {
+  const originalFetch = globalThis.fetch;
+  let outsideRequests = 0;
+  globalThis.fetch = async () => { outsideRequests += 1; throw Error('NO_EXTERNAL_PAID_REQUESTS'); };
+  const runs: Array<{ model: string; options: any }> = [];
+  const payload = {
+    contract_version: '1.1',
+    operation: 'sceneImages',
+    payload: {
+      generation: { source: 'beatvision', cost_class: 'free', requested_model: 'flux-schnell' },
+      style: 'cinematic', world: {},
+      storyboard: { scenes: [{ scene: 1, beatId: 'scene-1', direction: 'foggy walkway', startTime: 0, endTime: 3 }] }
+    }
+  };
+  try {
+    const response = await worker.fetch(new Request('https://arena.example/v1/client/image/scene', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-gateway-token' },
+      body: JSON.stringify(payload)
+    }), {
+      PIXAZO_API_KEY: 'configured-but-must-not-be-used',
+      GATEWAY_TOKEN: 'test-gateway-token',
+      BEATVISION_FREE_WORKERS_AI_CONFIRMED: 'true',
+      AI: { run: async (model: string, options: any) => {
+        runs.push({ model, options }); return { image: 'ZmFrZS1pbWFnZQ==' };
+      } }
+    });
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.result.free_only, true);
+    assert.deepEqual(body.result.provider_path, ['cloudflare-workers-ai']);
+    assert.equal(body.result.images[0].model, 'flux-1-schnell');
+    assert.equal(runs.length, 1);
+    assert.equal(runs[0].model, '@cf/black-forest-labs/flux-1-schnell');
+    assert.equal(runs[0].options.steps, 4);
+    assert.equal(outsideRequests, 0, 'no Pixazo or other external provider was contacted');
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('unconfirmed Workers Free entitlement refuses BeatVision images before contacting any provider', async () => {
+  let calls = 0;
+  const oldFetch = globalThis.fetch;
+  globalThis.fetch = async () => { calls++; throw Error('NO_PAID_FALLBACK'); };
+  try {
+    const payload = { contract_version: '1.1', operation: 'sceneImages',
+      payload: { generation: { source: 'beatvision', cost_class: 'free' },
+        storyboard: { scenes: [{ scene: 1, direction: 'shadowy warehouse' }] } } };
+    for (const flag of ['false', undefined]) {
+      const response = await worker.fetch(new Request('https://arena.example/v1/client/image/scene', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer fixture-gateway' },
+        body: JSON.stringify(payload)
+      }), { GATEWAY_TOKEN: 'fixture-gateway', PIXAZO_API_KEY: 'present-but-denied',
+        BEATVISION_FREE_WORKERS_AI_CONFIRMED: flag, AI: { run: async () => { calls++; throw Error('MUST_NOT_RUN'); } } });
+      assert.equal(response.status, 503);
+      const result = await response.json();
+      assert.equal(result.code, 'PROVIDER_COST_UNVERIFIED');
+      assert.equal(calls, 0);
+    }
+  } finally { globalThis.fetch = oldFetch; }
+});
