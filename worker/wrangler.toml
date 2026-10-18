@@ -3,6 +3,11 @@ main = "src/arena-validated-entry.ts"
 compatibility_date = "2026-09-09"
 
 [vars]
+# Owner-verified Workers Free entitlement, restored from the currently deployed
+# v474 Worker. Must be included in Wrangler-managed versions; an omitted binding
+# caused a newer inactive v475 upload to lose free BeatVision scene images.
+# If account moves off Workers Free, remove this flag before deploying.
+BEATVISION_FREE_WORKERS_AI_CONFIRMED = "true"
 ALLOWED_ORIGIN = "https://daddydom8249.github.io,https://beat-vision-theta.vercel.app"
 VIDEO_PROVIDER = "pixazo"
 PIXAZO_WORLD_IMAGE_MODEL = "flux-schnell"

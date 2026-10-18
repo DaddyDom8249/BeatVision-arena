@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
 import worker from './arena-entry.ts';
 
 test('BeatVision scene-image route executes Flux Schnell only', async () => {
@@ -186,4 +187,11 @@ test('unconfirmed Workers Free entitlement refuses BeatVision images before cont
       assert.equal(calls, 0);
     }
   } finally { globalThis.fetch = oldFetch; }
+});
+
+test('Wrangler deploys preserve the confirmed free Workers AI gate', () => {
+  const config = readFileSync(existsSync('worker/wrangler.toml') ? 'worker/wrangler.toml' : 'wrangler.toml', 'utf8');
+  assert.match(config, /^BEATVISION_FREE_WORKERS_AI_CONFIRMED = "true"$/m);
+  assert.match(config, /^\[ai\]$/m);
+  assert.match(config, /^binding = "AI"$/m);
 });
