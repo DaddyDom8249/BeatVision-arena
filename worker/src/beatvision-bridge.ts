@@ -272,8 +272,14 @@ export function beatVisionBridgeCapabilities(env: any) {
     analysis: { provider: 'beatvision-local-dsp', authoritative: true },
     transcription: { provider: 'groq-whisper', authoritative: true, optional: true },
     world: { provider: 'beatvision-world', authoritative: true },
-    image: { provider: 'pixazo', models: [...FREE_IMAGE_MODELS] },
+    image: {
+      provider: 'cloudflare-workers-ai',
+      models: [...FREE_IMAGE_MODELS],
+      execution_mode: 'cloudflare-only',
+      verified_free: env.BEATVISION_FREE_WORKERS_AI_CONFIRMED === 'true' &&
+        Boolean(env.AI && typeof env.AI.run === 'function'),
+    },
     video: { provider: 'pixazo-or-hf-zerogpu', models: [...FREE_VIDEO_MODELS], hf_zerogpu_configured: Boolean(env.HF_VIDEO_TOKEN), paid_or_unknown_cost_models_never_auto_selected: true },
-    assembly: { provider: 'shotstack-sandbox', cost_class: 'free' },
+    assembly: { provider: 'shotstack-sandbox', cost_class: 'unverified', verified_free: false },
   };
 }

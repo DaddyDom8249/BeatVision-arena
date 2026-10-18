@@ -1,3 +1,15 @@
+## 2026-10-18 — Source-only free-image provider hardening
+
+**Baseline:** main a1748eef37ebeadaab05332ba1e642261a3cdda7. Canonical BeatVision /v2 image bridge was routed to a legacy Pixazo-first handler that later fell back to Cloudflare Workers AI. Production BeatVision generation independently refuses images because provider cost is unverified.
+
+**Change:** BeatVision-sourced scene-image jobs now exclusively use Cloudflare-bound Flux Schnell, never Pixazo, with fail-closed certification `BEATVISION_FREE_WORKERS_AI_CONFIRMED=true`. The certified capability is exposed only on authenticated health response and requires an actual Workers AI binding. The Shotstack assembly capability now reports unverified cost instead of claiming free. Existing legacy routing preserved. Added independent mock regressions asserting zero provider traffic before verification and zero Pixazo traffic when certified.
+
+**Cost status:** Cloudflare documents 10,000 free neurons per day and charges overage on Workers Paid. Connected API confirms the active Arena Worker has an AI binding but subscription enumeration is forbidden by the connection (Cloudflare API authentication error 10000). **Workers Free plan NOT VERIFIED, certification NOT set, no AI inference executed.** No worker deployed and no paid/unknown provider called in this cycle.
+
+**Verification:** Arena PR #46 source head `cc5203a22a1ec223ff62b14d628c83bce2f26412` passed GitHub Arena Audit run `39095869728` (Worker bundle/type checks, image routing regressions, security and other audit steps all succeeded); this proves mocked route enforcement, not real cost entitlement or production image generation. Production remains gated pending verifiable free entitlement and a separate proven-free assembly path. Do not activate certification using an assumption or a statement that Flux Schnell is free.
+
+---
+
 # BeatVision Arena Project Log
 
 ## 2026-10-09 17:41 UTC — Restore buildable Worker source and preserve live motion timing
