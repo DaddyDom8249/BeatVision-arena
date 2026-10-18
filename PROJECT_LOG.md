@@ -1,5 +1,20 @@
 # BeatVision Arena Project Log
 
+## 2026-10-16 — Remove pre-auth streaming double-allocation, add missing CI regression
+
+**Scope:** Existing unmerged Arena hardening PR #45. No main merge, Worker deployment, secret/provider change, production mutation or paid request.
+
+**Finding:** CodeRabbit identified a major memory risk: up to 8 MiB in streamed chunks remained resident while a second full-sized array was allocated before authentication. Existing Arena Audit was passing but did not run `worker/src/request-size.test.ts` at all.
+
+**Change:** `worker/src/arena-validated-entry.ts` now appends bytes into one incrementally-grown, bounded buffer instead of holding every chunk and allocating another full-size assembly buffer. The strict actual-byte 8 MiB ceiling and upstream cancellation on excess remain intact. Exported the bounded reader for direct regression testing. `worker/src/request-size.test.ts` now checks exact binary-byte preservation through chunk growth. `.github/workflows/audit.yml` explicitly bundles and runs the request-size suite for PRs.
+
+**Verification:** An isolated Node 22 test of the exact proposed bounded-reader algorithm passed binary multi-chunk retention, over-limit stream cancellation and empty-body cases (exit 0). The pre-CI-gate branch run 38872796124 passed its existing suite but **did not execute** the newly relevant request-size tests; this is NOT a passing exact-head gate. Source commits `c69704f6`, `7ad0e72`, `81da6eb` pushed to the existing PR branch. Exact-head CI, workload/memory concurrency behavior, live Cloudflare deployment and provider flow remain **NOT VERIFIED** at this checkpoint.
+
+**Post-push CI follow-up (2026-10-16):** GitHub Arena Audit run [38873176684](https://github.com/DaddyDom8249/BeatVision-arena/actions/runs/38873176684) completed **SUCCESS** on repair HEAD `c900d03954e9937996fb35657733c35f5f758b20`. The job's new "Bounded request-body regression tests", "Worker bundle/type-surface checks", and "Security regression audit" steps all reported success. This confirms source-level tests and Worker bundling, **not** live Cloudflare rollout or actual load/concurrency memory behavior. The PR remains unmerged, undeployed and subject to release review.
+
+**Next gate:** Reconcile the outstanding CodeRabbit review, verify branch/base compatibility, then consider release only under existing deployment/production authorization and zero-cost constraints.
+
+
 ## 2026-10-09 17:41 UTC — Restore buildable Worker source and preserve live motion timing
 
 **Observed failure:** GitHub main 7454dace fails Worker deployment run 37729347507 at animation-jobs.ts:33 with Syntax error (backslash). The new real-module motion tests and local esbuild entry build reproduce the same invalid TypeScript before repair.
@@ -75,3 +90,14 @@ Mobile production evidence: Gradio accepted a job and subsequently reported an S
 ## 2026-10-13 — Probe endpoint correction
 
 Current official Shotstack API documentation specifies GET /edit/stage/probe/:encodedAssetUrl. Draft Worker still used legacy /v1/probe; corrected to the documented staging route, and mocks assert the new request path. No live API request was made. A historical Shotstack answer states the inspector uses no credits; current account entitlements remain unverified.
+
+
+## 2026-10-14 — Arena request-size streaming guard (PR #45, source only)
+
+**Confirmed defect:** The prior size limit checked only `Content-Length`. Chunked bodies without the header (or bodies with dishonest smaller headers) reached JSON parsing and downstream handlers with no true byte cap.
+
+**Root cause and safe fix:** `worker/src/arena-validated-entry.ts` now consumes the original ReadableStream with a running 8 MiB cap, cancels on the first excess byte and forwards a reconstructed Request with the bounded data. It intentionally does **not** use `request.clone()` to inspect the body because teeing can buffer the unread branch. The existing fast `Content-Length` rejection remains. Over-limit requests return 413 before any gateway/provider call. A body stream read error returns 400. No approved media, secrets, model fallback or provider contract changed.
+
+**Regression tests:** `worker/src/request-size.test.ts` now covers streaming without Content-Length and cancellation, falsified small declared length, prior declared oversize denial and normal unauthorized bridge behavior. GitHub Arena Audit run 38574724891 for commit `159fd7d6a127c53b9519b7d86df546f1078c6899` SUCCESS. Worker deployment and live production protection remain UNVERIFIED.
+
+**Release:** PR #45 remains draft; no production Arena deployment or provider calls were made. Local Worker/device verification not performed in this session.

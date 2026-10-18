@@ -10,6 +10,47 @@ import { beatVisionBridgeCapabilities, handleBeatVisionBridge } from './beatvisi
 
 const clientRateLimit = new Map<string, number>();
 const RATE_LIMIT_WINDOW_MS = 10000; // 10 seconds per client IP
+// Hardening 2026-10-14: refuse oversized bodies before auth/provider work or
+// JSON parsing. Generous enough for base64 reference images.
+export const MAX_REQUEST_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Read directly from the original stream, not from request.clone(): the
+ * latter tees the stream and can buffer an unlimited amount for its unread
+ * branch. Stop at the first byte over the cap, including chunked requests
+ * without a Content-Length header. Downstream handlers receive a new Request
+ * containing only the successfully bounded body.
+ */
+export async function readBoundedRequestBody(r: Request): Promise<Request | null> {
+  if (!r.body) return r;
+  const reader = r.body.getReader();
+  // Grow one bounded buffer instead of retaining all chunks while allocating
+  // a second full-size body. Small requests do not reserve 8 MiB upfront.
+  let body = new Uint8Array(0);
+  let length = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value.byteLength > MAX_REQUEST_BYTES - length) {
+        void reader.cancel().catch(() => undefined);
+        return null;
+      }
+      const required = length + value.byteLength;
+      if (required > body.byteLength) {
+        const capacity = Math.min(MAX_REQUEST_BYTES, Math.max(required, body.byteLength ? body.byteLength * 2 : 64 * 1024));
+        const next = new Uint8Array(capacity);
+        next.set(body.subarray(0, length));
+        body = next;
+      }
+      body.set(value, length);
+      length = required;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return new Request(r, { body: body.subarray(0, length) });
+}
 
 // Per-request env so json() can apply the ALLOWED_ORIGIN allowlist instead of
 // reflecting whatever Origin the caller sent.
@@ -34,6 +75,23 @@ export default {
   async fetch(r: Request, env: any, ctx: ExecutionContext) {
     requestEnv.set(r, env);
     if (r.method === 'OPTIONS') return arena.fetch(r, env, ctx);
+    const declaredLength = Number(r.headers.get('Content-Length') || '0');
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BYTES) {
+      return json(r, { ok: false, status: 'payload_too_large', error: 'Request body is too large.' }, 413);
+    }
+    if (r.body) {
+      let bounded: Request | null;
+      try {
+        bounded = await readBoundedRequestBody(r);
+      } catch {
+        return json(r, { ok: false, status: 'invalid_request_body', error: 'Request body could not be read.' }, 400);
+      }
+      if (!bounded) {
+        return json(r, { ok: false, status: 'payload_too_large', error: 'Request body is too large.' }, 413);
+      }
+      r = bounded;
+      requestEnv.set(r, env);
+    }
     const token = String(env.GATEWAY_TOKEN || '').trim();
     const path = new URL(r.url).pathname;
 

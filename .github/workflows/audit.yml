@@ -66,6 +66,11 @@ jobs:
           npx --yes esbuild worker/src/cors-validated-entry.test.ts --bundle --format=esm --platform=node --outfile=/tmp/cors-validated-entry.test.mjs
           node --test /tmp/cors-validated-entry.test.mjs
 
+      - name: Bounded request-body regression tests
+        run: |
+          npx --yes esbuild worker/src/request-size.test.ts --bundle --format=esm --platform=node --outfile=/tmp/request-size.test.mjs
+          node --test /tmp/request-size.test.mjs
+
       - name: Flux Schnell scene-image routing regression test
         run: |
           npx --yes esbuild worker/src/arena-entry-flux-schnell.test.ts --bundle --format=esm --platform=node --outfile=/tmp/arena-entry-flux-schnell.test.mjs

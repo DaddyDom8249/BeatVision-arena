@@ -12,13 +12,14 @@
     "test:reuse": "node --experimental-strip-types --test src/visual-reuse-detector.test.ts",
     "test:musical-structure": "node --experimental-strip-types --test src/musical-structure.test.ts",
     "test:scene-splitting": "node --experimental-strip-types --test src/scene-splitting.test.ts",
-    "test": "npm run test:storyboard && npm run test:render-integrity && npm run test:composition && npm run test:reuse && npm run test:musical-structure && npm run test:scene-splitting && npm run test:beatvision-bridge && npm run test:scene-image-routing && npm run test:animation-jobs && npm run test:free-video && npm run test:gateway-auth && npm run test:provider-timeouts && npm run test:skills",
+    "test": "npm run test:storyboard && npm run test:render-integrity && npm run test:composition && npm run test:reuse && npm run test:musical-structure && npm run test:scene-splitting && npm run test:beatvision-bridge && npm run test:scene-image-routing && npm run test:animation-jobs && npm run test:free-video && npm run test:gateway-auth && npm run test:provider-timeouts && npm run test:skills && npm run test:request-size",
     "test:beatvision-bridge": "node --experimental-strip-types --test src/beatvision-bridge.test.ts",
     "test:scene-image-routing": "node --experimental-strip-types --test src/arena-entry-flux-schnell.test.ts",
     "test:animation-jobs": "node --experimental-strip-types --test src/animation-jobs.test.ts",
     "test:free-video": "node --experimental-strip-types --test src/hf-zerogpu-video.test.ts",
     "test:gateway-auth": "node --experimental-strip-types --test src/gateway-auth.test.ts",
     "test:provider-timeouts": "node --experimental-strip-types --test src/provider-timeouts.test.ts",
-    "test:skills": "node --experimental-strip-types --test src/skills.test.ts"
+    "test:skills": "node --experimental-strip-types --test src/skills.test.ts",
+    "test:request-size": "node --experimental-strip-types --test src/request-size.test.ts"
   }
 }
