@@ -127,3 +127,72 @@ test('BeatVision scene-image route falls back to Cloudflare Workers AI on Pixazo
     globalThis.fetch = originalFetch;
   }
 });
+
+
+import { handleBeatVisionBridge } from './beatvision-bridge.ts';
+
+function beatvisionImageRequest() {
+  return new Request('https://arena.example/v2/scene-image', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer test-gateway-token', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ payload: {
+      source: { application: 'beatvision', contract: '2.0' },
+      project: { id: 'proj-test' },
+      song: { title: 'Test song', duration_seconds: 10 },
+      analysis: { analysis_method: 'browser_audio_decode' },
+      world: { version: 'world-1' },
+      style: { version: 'style-1' },
+      vision_lock: { locked: true, version: 'lock-1' },
+      scene: { id: 'scene-1', scene_number: 1, start_time: 0, end_time: 4 },
+      generation: { cost_class: 'free', model: 'flux-schnell' }
+    } })
+  });
+}
+
+test('canonical BeatVision image refuses any provider when Workers Free entitlement is unverified', async () => {
+  let calls = 0;
+  const env = {
+    GATEWAY_TOKEN: 'test-gateway-token',
+    PIXAZO_API_KEY: 'pixazo-must-not-be-used',
+    AI: { run: async () => { calls++; throw new Error('must not call AI'); } }
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { calls++; throw new Error('must not contact Pixazo'); };
+  try {
+    const response = await handleBeatVisionBridge(beatvisionImageRequest(), env, (request, e) => worker.fetch(request, e));
+    assert.equal(response?.status, 503);
+    const result = await response!.json();
+    assert.equal(result.code, 'PROVIDER_COST_UNVERIFIED');
+    assert.equal(calls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('certified canonical BeatVision image only uses the Cloudflare Flux Schnell binding, never Pixazo', async () => {
+  let upstreamCalls = 0, aiCalls = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { upstreamCalls++; throw new Error('Pixazo should never be invoked'); };
+  try {
+    const env = {
+      GATEWAY_TOKEN: 'test-gateway-token',
+      PIXAZO_API_KEY: 'pixazo-must-not-be-used',
+      BEATVISION_FREE_WORKERS_AI_CONFIRMED: 'true',
+      AI: { run: async (model: string, inputs: any) => {
+        aiCalls++;
+        assert.equal(model, '@cf/black-forest-labs/flux-1-schnell');
+        assert.equal(inputs.steps, 4);
+        return { image: 'ZmFrZS1tb2NrLWJ5dGVz' };
+      } }
+    };
+    const response = await handleBeatVisionBridge(beatvisionImageRequest(), env, (request, e) => worker.fetch(request, e));
+    assert.equal(response?.status, 200);
+    const result = await response!.json();
+    assert.equal(result.result.images[0].provider, 'cloudflare-workers-ai');
+    assert.equal(result.result.images[0].image_base64, 'ZmFrZS1tb2NrLWJ5dGVz');
+    assert.equal(aiCalls, 1);
+    assert.equal(upstreamCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
