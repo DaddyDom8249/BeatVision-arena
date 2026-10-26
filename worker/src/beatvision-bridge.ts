@@ -50,8 +50,17 @@ function validate(payload: any, operation: string) {
   if (!hasObject(payload?.song)) errors.push('song is required.');
   if (!(finite(payload?.song?.duration_seconds) > 0)) errors.push('song.duration_seconds must be greater than zero.');
   if (!hasObject(payload?.analysis)) errors.push('BeatVision-owned song analysis is required.');
-  if (payload?.analysis?.analysis_method !== 'browser_audio_decode') {
-    errors.push('analysis.analysis_method must identify BeatVision browser audio analysis.');
+  // Server transcription is a supported intake fallback when browser decoding
+  // is unavailable. Preserve its actual provenance; do not relabel it as DSP.
+  const analysis = payload?.analysis;
+  const transcriptionOnly = (analysis?.analysis_method == null || analysis.analysis_method === 'groq_transcription') &&
+    analysis?.transcription_method === 'groq_whisper' && analysis.transcription_provider === 'groq' &&
+    ['whisper-large-v3-turbo', 'whisper-large-v3'].includes(analysis.transcription_model) &&
+    analysis.transcription_status === 'completed' && typeof analysis.transcript === 'string' && !!analysis.transcript.trim() &&
+    typeof analysis.duration_seconds === 'number' && Number.isFinite(analysis.duration_seconds) && analysis.duration_seconds > 0 &&
+    Math.abs(analysis.duration_seconds - finite(payload?.song?.duration_seconds)) <= 0.25;
+  if (analysis?.analysis_method !== 'browser_audio_decode' && !transcriptionOnly) {
+    errors.push('analysis must identify browser audio analysis or completed Groq transcription with matching song duration.');
   }
   if (!hasObject(payload?.world)) errors.push('BeatVision-owned world is required.');
   if (!text(payload?.world?.version, 100)) errors.push('world.version is required for Vision Lock provenance.');
@@ -195,6 +204,7 @@ export async function handleBeatVisionBridge(
       capability: operation === 'assemble' ? 'video' : operation === 'animate' ? 'video' : 'image',
       status: 'contract_validation_failed',
       request_id: requestId,
+      error: { code: 'BRIDGE_CONTRACT_INVALID', message: errors.join(' ') },
       errors,
     }, 422);
   }

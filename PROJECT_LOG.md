@@ -75,3 +75,39 @@ Mobile production evidence: Gradio accepted a job and subsequently reported an S
 ## 2026-10-13 — Probe endpoint correction
 
 Current official Shotstack API documentation specifies GET /edit/stage/probe/:encodedAssetUrl. Draft Worker still used legacy /v1/probe; corrected to the documented staging route, and mocks assert the new request path. No live API request was made. A historical Shotstack answer states the inspector uses no credits; current account entitlements remain unverified.
+
+## 2026-10-26 America/Chicago — Accept truthful transcription-only image requests
+
+Creator screenshots show Bragora forge paused at0/50 with Arena rejected generation.
+Read-only production jobs474180c5,938b982c,2f6b9f1c record contract_validation_failed:
+analysis.analysis_method must identify BeatVision browser audio analysis. Their
+frozen analysis has completed groq/groq_whisper/whisper-large-v3-turbo, transcript,
+segments/words and249.59999948799998s duration, but no local-DSP method. The existing
+analyzer legitimately supports server-only fallback. Four project revisions have
+zero stored images/motion; no missing-media restoration or revision creation needed.
+
+Baseline maincbf4cbcb0a4b8c51d02adc9b67dbc5b4adc5615b. Existing root instructions,
+project histories and actual live Worker reviewed. Small bridge validation change
+accepts completed known Groq transcription with real transcript, positive numeric
+matching duration and absent/explicit transcription method. Unknown, incomplete,
+mismatched evidence still rejects. Incoming analysis remains untouched: no invented
+browser DSP, BPM/key, source claims or database changes. Return safe contract error
+message so current UI reports the cause on future failed requests. Gateway auth,
+Vision Lock, timing, free provider/model guards and original media remain intact.
+
+Verification: baseline63/63 Worker tests; two new behavioral regressions fail before
+repair. Final67/67 pass, build via esbuild and diff check pass. Captured actual
+active f3e727e0 bundle main188737chars; SHA256d5433af23105c0b9fd31e7def96c0d5c855aa9cbebbf716e26a9d515cc970c63.
+Patched only exact compiled validator/error blocks, removing stale source-map link.
+Actual complete pre/post bundles execute locally: old422/0mockAI, patched200/1mockAI;
+invalid evidence422 and wrong-auth401 preserved; zero network/provider requests.
+Patched mainSHA2560609c53c33a6e267e2226e69f642d947198ebf63877288cd2a6e783641926323.
+Exact compatible diff recorded under worker/releases/. Live settings retain confirmed
+Free flag, AI binding and DO namespace d6bf26572a32437aa95d86e30e2d84d4.
+
+One local edit used wrong working-directory prefix and failed before any write;
+corrected path. Multipart capture initially selected first part, whose order varies;
+corrected to exact module name and verified complete hash before patching. No partial
+capture accepted. Production content deployment/source readback pending. No inference,
+retry, batch resume, approval, provider/cost change, data mutation or main merge.
+Real successful image remains unverified until creator deliberately retries Scene1.
