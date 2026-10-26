@@ -1,0 +1,28 @@
+--- /tmp/arena-live-before.mjs	2026-10-26 21:36:03.193517002 +0000
++++ /tmp/arena-live-patched.mjs	2026-10-26 21:36:06.705592614 +0000
+@@ -3030,8 +3030,10 @@
+   if (!hasObject(payload?.song)) errors.push("song is required.");
+   if (!(finite4(payload?.song?.duration_seconds) > 0)) errors.push("song.duration_seconds must be greater than zero.");
+   if (!hasObject(payload?.analysis)) errors.push("BeatVision-owned song analysis is required.");
+-  if (payload?.analysis?.analysis_method !== "browser_audio_decode") {
+-    errors.push("analysis.analysis_method must identify BeatVision browser audio analysis.");
++  const analysis = payload?.analysis;
++  const transcriptionOnly = (analysis?.analysis_method == null || analysis.analysis_method === "groq_transcription") && analysis?.transcription_method === "groq_whisper" && analysis.transcription_provider === "groq" && ["whisper-large-v3-turbo", "whisper-large-v3"].includes(analysis.transcription_model) && analysis.transcription_status === "completed" && typeof analysis.transcript === "string" && !!analysis.transcript.trim() && typeof analysis.duration_seconds === "number" && Number.isFinite(analysis.duration_seconds) && analysis.duration_seconds > 0 && Math.abs(analysis.duration_seconds - finite4(payload?.song?.duration_seconds)) <= 0.25;
++  if (analysis?.analysis_method !== "browser_audio_decode" && !transcriptionOnly) {
++    errors.push("analysis must identify browser audio analysis or completed Groq transcription with matching song duration.");
+   }
+   if (!hasObject(payload?.world)) errors.push("BeatVision-owned world is required.");
+   if (!text4(payload?.world?.version, 100)) errors.push("world.version is required for Vision Lock provenance.");
+@@ -3156,6 +3158,7 @@
+       capability: operation === "assemble" ? "video" : operation === "animate" ? "video" : "image",
+       status: "contract_validation_failed",
+       request_id: requestId,
++      error: { code: "BRIDGE_CONTRACT_INVALID", message: errors.join(" ") },
+       errors
+     }, 422);
+   }
+@@ -3495,4 +3498,3 @@
+   corsHeadersFor,
+   arena_validated_entry_default as default
+ };
+-//# sourceMappingURL=arena-validated-entry.js.map
