@@ -111,3 +111,13 @@ corrected to exact module name and verified complete hash before patching. No pa
 capture accepted. Production content deployment/source readback pending. No inference,
 retry, batch resume, approval, provider/cost change, data mutation or main merge.
 Real successful image remains unverified until creator deliberately retries Scene1.
+
+Release: Arena sourceb65c4d4418d45ced5269940ea87a8e8259febc11, PR49,
+exact-source Audit40406014626 SUCCESS. Content-only upload deployed version
+ddbc386c-5540-483b-b80f-6cb8b0538d41 at100%; retrieved main SHA256 equals the
+tested0609c53c33a6e267e2226e69f642d947198ebf63877288cd2a6e783641926323.
+All bindings (including secret references, confirmed-free flag and Durable Object
+namespace), compatibility date and existing exports unchanged. Main not merged.
+No failed job rewritten, real provider call, retry or batch resume. Creator also
+clarified Beginner Help must automatically direct the whole plan; that separate
+app improvement is now in progress. Real new image output still UNVERIFIED.
